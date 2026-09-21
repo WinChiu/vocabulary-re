@@ -51,6 +51,7 @@ const state = {
   },
   filters: defaultFilters(),
   libraryPage: 1,
+  libraryFiltersOpen: false,
   customOpen: false,
   previewId: null,
   previewIds: [],
@@ -602,6 +603,11 @@ const actions = {
     state.filters = defaultFilters();
     state.libraryPage = 1;
     render();
+  },
+  'toggle-library-filters': () => {
+    state.libraryFiltersOpen = !state.libraryFiltersOpen;
+    render();
+    root.querySelector('[data-action="toggle-library-filters"]')?.focus({ preventScroll: true });
   },
   'add-example': () => {
     captureDraft();

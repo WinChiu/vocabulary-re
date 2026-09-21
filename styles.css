@@ -154,3 +154,29 @@ main#main{min-height:100dvh;padding-top:35px;padding-bottom:calc(var(--nav-heigh
   .result-actions{position:fixed;left:0;right:0;bottom:var(--nav-height);z-index:25;height:var(--task-actions-height);margin:0;padding:12px 18px;border-top:1px solid var(--line);background:#f8f9f3;display:flex;justify-content:center}
   .result-actions button{height:48px;min-height:48px;width:100%;max-width:564px}
 }
+
+/* Keep Library search in reach, with optional filters and edge-to-edge cards. */
+.library-panel{overflow:visible;border-radius:0;border-left:0;border-right:0}
+#library-filters{position:sticky;top:0;z-index:20;background:#fdfdfb;padding-top:env(safe-area-inset-top,0px);box-shadow:0 3px 10px #344a290a}
+#library-filters .search-wrap{padding:10px 16px;gap:10px}
+#library-filters .search-wrap input{flex:1;min-width:0}
+.filter-toggle{display:flex;align-items:center;justify-content:center;flex:none;width:44px;height:44px;border:1px solid var(--line);border-radius:8px;color:var(--green)}
+.filter-toggle[aria-expanded="true"]{background:#e6eddd;border-color:#b9c8aa}
+#library-filter-options[hidden]{display:none}
+#library-filter-options{max-height:45dvh;overflow-y:auto;border-bottom:1px solid var(--line)}
+@media(max-width:600px){
+  main#main[data-page="library"]{padding-left:0;padding-right:0}
+  #main[data-page="library"]>.page-heading{margin-left:16px;margin-right:16px}
+  #library-filters .search-wrap input{font-size:16px}
+  #library-filters .search-wrap input::placeholder{font-size:12px}
+  .library-panel .word-row{border-radius:0;padding-left:max(16px,env(safe-area-inset-left,0px));padding-right:max(16px,env(safe-area-inset-right,0px))}
+}
+
+/* Library title and compact actions share one row on every screen size. */
+.page-heading.compact.library-heading{display:flex;align-self:stretch;flex-direction:row;flex-wrap:nowrap;justify-content:space-between;gap:12px}
+.page-heading.compact.library-heading .heading-actions{display:flex;justify-content:flex-end;flex-direction:row;flex:0 0 auto;width:auto;gap:4px;margin-left:auto}
+.page-heading.compact.library-heading .heading-actions button{flex:none;width:44px;min-width:44px;height:44px;min-height:44px;padding:0;color:var(--green);border-radius:8px}
+.library-heading .heading-actions button:hover{background:#e6eddd}
+@media(max-width:600px){
+  #main[data-page="library"]>.library-heading{margin-right:max(8px,env(safe-area-inset-right,0px))}
+}

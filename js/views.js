@@ -90,7 +90,7 @@ export function libraryView(state, list) {
   const f = state.filters;
   const pages = Math.max(1, Math.ceil(list.length / 15));
   const page = Math.min(state.libraryPage, pages);
-  return `<div class="page-heading compact"><h1>Library</h1><div class="heading-actions">${button('import', icon('upload-simple') + 'Import CSV', 'secondary')}${button('add', icon('plus') + 'Add word', 'primary')}</div></div><section class="library-panel"><form id="library-filters"><div class="search-wrap">${icon('magnifying-glass')}<input name="search" aria-label="Search library" placeholder="Search words, meanings, or notes…" value="${e(f.search)}"><span>/</span></div><div class="filter-row">${select('status', 'Status', statusOptions, f.status)}${select(
+  return `<div class="page-heading compact library-heading"><h1>Library</h1><div class="heading-actions">${button('import', icon('upload-simple'), 'icon-button', 'aria-label="Import CSV" title="Import CSV"')}${button('add', icon('plus'), 'icon-button', 'aria-label="Add word" title="Add word"')}</div></div><section class="library-panel"><form id="library-filters"><div class="search-wrap">${icon('magnifying-glass')}<input name="search" aria-label="Search library" placeholder="Search words, meanings, or notes…" value="${e(f.search)}">${button('toggle-library-filters', icon('sliders-horizontal'), 'filter-toggle', `aria-label="Filters" aria-expanded="${state.libraryFiltersOpen}" aria-controls="library-filter-options"` )}</div><div id="library-filter-options" class="filter-row" ${state.libraryFiltersOpen ? '' : 'hidden'}>${select('status', 'Status', statusOptions, f.status)}${select(
     'type',
     'Type',
     [
