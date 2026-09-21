@@ -241,6 +241,8 @@ async function ensureAuth() {
           await loadCards();
         } else renderLogin();
       });
+      // Prepare the provider ahead of the click, without blocking existing sessions.
+      module.prepareLogin().catch(error => { if (!state.user) renderLogin(error.message); });
       return module;
     } catch (error) {
       authSetup = null;
@@ -507,8 +509,13 @@ const actions = {
     const btn = root.querySelector('[data-action="login"]');
     btn.disabled = true;
     try {
-      const auth = await ensureAuth();
-      await auth.login();
+      if (!authModule) {
+        const auth = await ensureAuth();
+        await auth.prepareLogin();
+        renderLogin('Sign-in is ready. Tap Continue with Google to proceed.');
+        return;
+      }
+      await authModule.login();
     } catch (error) {
       const messages = {
         'auth/popup-blocked':
@@ -519,11 +526,18 @@ const actions = {
           'Open this app directly in Safari or Chrome to sign in.',
         'auth/unauthorized-domain':
           'This site is not an authorized Firebase domain. Add it in Firebase Authentication settings.',
+        'auth/not-ready': 'Sign-in is loading. Wait a moment and tap Continue with Google again.',
+        'auth/google-denied': 'Google sign-in was not completed. Please try again.',
+        'auth/google-unavailable': 'Google sign-in could not load. Check your connection and try again.',
+        'auth/timeout': 'Sign-in timed out. Please close the sign-in window and try again.',
       };
       renderLogin(
         messages[error.code] ||
           'Google sign-in is not configured or could not connect. Add your Firebase configuration and try again in Safari or Chrome.',
       );
+      if (error.code === 'auth/not-ready' || error.code === 'auth/google-unavailable') {
+        authModule?.prepareLogin().catch(() => {});
+      }
     }
   },
   async logout() {

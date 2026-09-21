@@ -38,7 +38,7 @@ The latest design intentionally omits the app header and motivational text, with
 ## Firebase setup
 
 1. Copy `js/firebase-config.template.js` to `js/firebase-config.js` and insert your Firebase web app settings. The real file is gitignored.
-2. Enable Google sign-in in Firebase Authentication. Add localhost and the deployment hostname to Authorized Domains.
+2. Enable Google sign-in in Firebase Authentication. Add localhost and the deployment hostname to Authorized Domains. In Google Cloud Console, also authorize `https://winchiu.github.io` as a JavaScript origin on the Google OAuth web client identified by `GOOGLE_CLIENT_ID` in `js/google-login.js`. Origins contain no path; local real sign-in requires its exact localhost origin and port too. Demo mode needs neither.
 3. Create a Firestore database. This app uses the collections `cards` and `cards_sv`. It assumes one authorized person, **not isolated data for multiple accounts**.
 4. Configure Firestore rules in the Firebase Console before using live data. For example, replacing the email below with the single authorized account:
 
@@ -60,6 +60,8 @@ service cloud.firestore {
 These rules are an explicit single-account example, not a multi-user schema. Firebase web API keys are public configuration; access control is enforced by the rules. Never put service-account credentials in this frontend.
 
 The app uses Firebase SDK 12.7.0 from gstatic, SheetJS 0.20.3 from its CDN, and Phosphor Icons 2.1.1. An internet connection is needed for those resources, Google fonts, dictionary lookups, and remote audio. Local changes in the demo do not persist.
+
+The app uses Google Identity Services to obtain a Google credential directly on this origin, then exchanges it with Firebase `signInWithCredential`. This avoids the cross-origin Firebase auth helper and its missing redirect-state errors in storage-partitioned mobile browsers. Google Identity Services is prepared before the click so opening the account picker retains the user gesture. No provider access token is stored by app code.
 
 ## Deploy
 
@@ -104,3 +106,4 @@ Date scheduling uses the browser's local timezone and local midnight. Early revi
 Import retries reuse stable document IDs, preventing duplicate documents after a partial batch failure. A timeout bounds the UI wait; it cannot cancel a Firestore write already sent. Review retries write computed absolute statistics rather than increments. Pending results and imports are in memory, so keep the page open until the operation succeeds. Concurrent editing in multiple tabs is outside this single-user version's conflict handling.
 
 References: [Firebase batch writes](https://firebase.google.com/docs/firestore/manage-data/transactions), [SheetJS standalone scripts](https://docs.sheetjs.com/docs/getting-started/installation/standalone/).
+

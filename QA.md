@@ -65,3 +65,10 @@ The mobile action row is fixed above the bottom navigation for review, add/edit,
 - Invalid CSV rows are previewed with reasons and excluded, rather than writing incomplete cards.
 - Language and sign-out moved to a dedicated Settings page at the user's request; language changes remain on Settings.
 - Removed motivational copy and the top app header. Today, Library and Settings use compact serif headings and a shared bottom navigation bar with safe-area spacing.
+
+## Mobile Google sign-in repair (2026-09-21)
+
+- Replaced Firebase popup-helper sign-in with Google Identity Services plus Firebase credential exchange; existing Firebase session persistence and Firestore permissions remain unchanged.
+- 38 unit tests pass, including seven direct-login tests for synchronous popup opening, credential exchange, cancellation/blocked popup retry, missing credentials, exchange failures, duplicate clicks, timeout and stale callbacks.
+- Verified the production OAuth origin in a clean browser: Google account sign-in opens without origin_mismatch. A 390px touch-enabled browser using the proposed app modules also opens Google's login screen, displays cancellation feedback and re-enables the button, with no page errors.
+- Completing sign-in with the owner's account and retrying on physical phones remain unverified. Browser emulation does not prove device storage behavior or authenticated Firestore access.

@@ -1,7 +1,7 @@
 import {
   getAuth,
   GoogleAuthProvider,
-  signInWithPopup,
+  signInWithCredential,
   signOut,
   onAuthStateChanged,
   setPersistence,
@@ -20,15 +20,25 @@ import {
 import { app, db } from './firebase-config.js';
 import { LANGUAGES, initialStats, sortCards } from './core.js';
 import { callWithTimeout, chunks } from './data.js';
+import { GOOGLE_CLIENT_ID, loadGoogleIdentity, createGoogleLogin } from './google-login.js';
 const auth = getAuth(app);
+let googleLogin;
 export async function initializeAuth(callback) {
   await callWithTimeout(setPersistence(auth, browserLocalPersistence));
   return onAuthStateChanged(auth, callback);
 }
+export async function prepareLogin() {
+  if (googleLogin) return;
+  const oauth2 = await loadGoogleIdentity();
+  googleLogin = createGoogleLogin({
+    oauth2,
+    clientId: GOOGLE_CLIENT_ID,
+    exchangeCredential: accessToken => signInWithCredential(auth, GoogleAuthProvider.credential(null, accessToken)),
+  });
+}
 export function login() {
-  const provider = new GoogleAuthProvider();
-  provider.setCustomParameters({ prompt: 'select_account' });
-  return signInWithPopup(auth, provider);
+  if (!googleLogin) return Promise.reject(Object.assign(new Error('Sign-in is loading. Please try again in a moment.'), {code:'auth/not-ready'}));
+  return googleLogin();
 }
 export const logout = () => signOut(auth);
 function convert(value) {
