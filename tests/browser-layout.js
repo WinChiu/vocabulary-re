@@ -1,0 +1,30 @@
+async (page) => {
+  await page.emulateMedia({reducedMotion:'reduce'});
+  const results=[];const check=async(c,label)=>{if(!await c)throw Error(label);results.push(label);};
+  await page.goto('http://127.0.0.1:4187/?auth_bypass=1');
+  await page.getByRole('button',{name:'Settings',exact:true}).click();
+  await page.getByRole('combobox',{name:'Learning language',exact:true}).selectOption('en');
+  await page.getByRole('button',{name:'Today',exact:true}).click();
+  await page.setViewportSize({width:390,height:844});
+  await check(page.locator('.app-header,.brand').count().then(n=>n===0),'Top brand row removed');
+  await check(page.locator('meta[name="viewport"]').getAttribute('content').then(t=>t.includes('viewport-fit=cover')),'iPhone viewport safe-area enabled');
+  await check(page.locator('.bottom-nav').evaluate(el=>parseFloat(getComputedStyle(el).paddingBottom)>=16),'Minimum bottom padding');
+  await page.evaluate(()=>document.documentElement.style.setProperty('--nav-safe-bottom','34px'));
+  await check(page.locator('.bottom-nav').evaluate(el=>getComputedStyle(el).paddingBottom==='34px'),'34px iPhone home indicator inset simulation');
+  await check(page.locator('.bottom-nav .nav').last().boundingBox().then(b=>844-b.y-b.height>=34),'Controls remain above home indicator space');
+  await check(page.locator('#main').evaluate(el=>parseFloat(getComputedStyle(el).paddingBottom)>=117),'Scrollable content reserves navigation and safe area');
+  await page.screenshot({path:'output/playwright/today-iphone-inset.png',fullPage:true});
+  await page.evaluate(()=>document.documentElement.style.removeProperty('--nav-safe-bottom'));
+  await page.screenshot({path:'output/playwright/today-mobile.png',fullPage:true});
+  await page.getByRole('button',{name:'Library',exact:true}).click();
+  await page.screenshot({path:'output/playwright/library-mobile.png',fullPage:true});
+  await page.getByRole('button',{name:'Settings',exact:true}).click();
+  await page.screenshot({path:'output/playwright/settings-mobile.png',fullPage:true});
+  await page.setViewportSize({width:320,height:740});
+  await page.getByRole('button',{name:'Library',exact:true}).click();
+  await check(page.evaluate(()=>document.documentElement.scrollWidth<=innerWidth),'320px library does not overflow');
+  await page.setViewportSize({width:1440,height:1000});
+  await page.getByRole('button',{name:'Today',exact:true}).click();
+  await page.screenshot({path:'output/playwright/today-desktop.png',fullPage:true});
+  console.log(JSON.stringify(results));
+}

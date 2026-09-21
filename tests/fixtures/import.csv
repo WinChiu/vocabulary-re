@@ -1,0 +1,6 @@
+單字,中文,分類,備註,例句,例句 2,source
+qa-import,匯入測試,QA,"a note, with comma","This qa-import works.","A second
+line example.",private preview field
+QA-IMPORT,重複,QA,,Repeated example.,,
+serendipity,既有,QA,,Existing example.,,
+invalid,,QA,,Missing meaning.,,

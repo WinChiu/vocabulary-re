@@ -1,0 +1,41 @@
+name: Deploy Just Word
+on:
+  push:
+    branches: [main]
+  workflow_dispatch:
+permissions:
+  contents: read
+  pages: write
+  id-token: write
+concurrency:
+  group: pages
+  cancel-in-progress: false
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - run: npm test
+      - name: Stage static site and Firebase configuration
+        env:
+          FIREBASE_CONFIG_CONTENT: ${{ secrets.FIREBASE_CONFIG_CONTENT }}
+        run: |
+          test -n "$FIREBASE_CONFIG_CONTENT" || { echo "Missing FIREBASE_CONFIG_CONTENT"; exit 1; }
+          mkdir -p _site/js _site/examples
+          cp index.html styles.css favicon.svg _site/
+          cp js/*.js _site/js/
+          cp examples/words.csv _site/examples/
+          printf '%s' "$FIREBASE_CONFIG_CONTENT" > _site/js/firebase-config.js
+      - uses: actions/configure-pages@v5
+      - uses: actions/upload-pages-artifact@v3
+        with:
+          path: _site
+      - name: Deploy
+        id: deployment
+        uses: actions/deploy-pages@v4
