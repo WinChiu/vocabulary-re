@@ -8,7 +8,7 @@ async (page) => {
   await check(page.locator('.word-row').count().then(n=>n===5),'Library: second page');
   await page.getByRole('textbox',{name:'Search library'}).fill('SERENDIPITY');
   await check(page.locator('.word-row').count().then(n=>n===1),'Search resets pagination and ignores case');
-  await page.getByRole('button',{name:'serendipity Little moments',exact:false}).click();
+  await page.getByRole('button',{name:'serendipity 意外發現美好事物的運氣',exact:false}).click();
   await check(page.getByRole('heading',{name:'serendipity',exact:true}).isVisible(),'Open detail');
   await page.getByRole('button',{name:'Next word',exact:true}).click();
   await check(page.getByRole('heading',{name:'serendipity',exact:true}).isVisible(),'Detail wraps within filtered results');
