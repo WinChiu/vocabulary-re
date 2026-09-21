@@ -4,3 +4,4 @@ output/
 .playwright-cli/
 .env
 service-account*.json
+backups/
