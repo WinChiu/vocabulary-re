@@ -46,64 +46,68 @@ export async function dictionary(word, { signal } = {}) {
 export const speechLanguage = (lang) => (lang === 'sv' ? 'sv-SE' : 'en-US');
 export const ttsURL = (text, lang) =>
   `https://translate.google.com/translate_tts?ie=UTF-8&client=tw-ob&tl=${lang === 'sv' ? 'sv' : 'en'}&q=${encodeURIComponent(text)}`;
+const isMobileBrowser = () => /Android|iPhone|iPad|iPod/i.test(navigator.userAgent);
+function waitForVoices(synth, timeout = 800) {
+  return new Promise((resolve) => {
+    const existing = synth.getVoices();
+    if (existing.length) return resolve(existing);
+    let done = false;
+    const finish = () => {
+      if (done) return;
+      done = true;
+      synth.removeEventListener('voiceschanged', finish);
+      resolve(synth.getVoices());
+    };
+    synth.addEventListener('voiceschanged', finish, { once: true });
+    setTimeout(finish, timeout);
+  });
+}
 async function nativeSpeech(text, lang) {
   if (!('speechSynthesis' in window)) throw new Error('Speech unavailable');
   const synth = window.speechSynthesis;
-  synth.cancel();
-  let voices = synth.getVoices();
-  if (!voices.length) {
-    await new Promise((resolve) => {
-      let timer;
-      const ready = () => {
-        clearTimeout(timer);
-        synth.removeEventListener('voiceschanged', ready);
-        resolve();
-      };
-      synth.addEventListener('voiceschanged', ready, { once: true });
-      timer = setTimeout(ready, 800);
-    });
-    voices = synth.getVoices();
-  }
-  const speech = new SpeechSynthesisUtterance(text);
-  speech.lang = speechLanguage(lang);
-  speech.voice =
-    voices.find((v) => v.lang === speech.lang) ||
-    voices.find((v) => v.lang.startsWith(lang)) ||
+  const lang_ = speechLanguage(lang);
+  const voices = await waitForVoices(synth);
+  const voice =
+    voices.find((v) => v.lang === lang_) ||
+    voices.find((v) => v.lang?.startsWith(lang)) ||
     null;
-  if (!speech.voice) console.warn('No matching speech voice is available.');
+  if (!voice) console.warn('No matching speech voice is available.');
   return new Promise((resolve, reject) => {
-    const timer = setTimeout(() => {
-      synth.cancel();
-      reject(new Error('Speech timed out'));
-    }, 10000);
-    speech.onend = () => {
-      clearTimeout(timer);
-      resolve();
+    const speech = new SpeechSynthesisUtterance(text);
+    speech.lang = lang_;
+    if (voice) speech.voice = voice;
+    let settled = false;
+    const finish = (ok) => {
+      if (settled) return;
+      settled = true;
+      ok ? resolve() : reject(new Error('Speech unavailable'));
     };
-    speech.onerror = () => {
-      clearTimeout(timer);
-      reject(new Error('Speech unavailable'));
-    };
-    synth.speak(speech);
+    // Chrome can silently drop speak() called right after cancel(); onend is
+    // also unreliable, so treat "started" (or a short grace period) as success
+    // instead of waiting for the utterance to actually finish.
+    speech.onstart = () => finish(true);
+    speech.onerror = () => finish(false);
+    synth.cancel();
+    setTimeout(() => {
+      try {
+        synth.speak(speech);
+      } catch {
+        finish(false);
+      }
+    }, 0);
+    setTimeout(() => finish(true), 1200);
   });
 }
 function googleSpeech(text, lang) {
-  return new Promise((resolve, reject) => {
-    const audio = new Audio(ttsURL(text, lang));
-    const finish = (error) => {
-      clearTimeout(timer);
-      audio.pause();
-      audio.removeAttribute('src');
-      error ? reject(error) : resolve();
-    };
-    const timer = setTimeout(() => finish(new Error('Audio timed out')), 10000);
-    audio.onended = () => finish();
-    audio.onerror = () => finish(new Error('Audio unavailable'));
-    audio.play().catch(finish);
-  });
+  const audio = new Audio(ttsURL(text, lang));
+  audio.preload = 'auto';
+  audio.playsInline = true;
+  // Resolve once playback starts rather than once it ends, so a slow or
+  // stalled network stream can't hang the caller.
+  return audio.play();
 }
 export async function speak(text, lang) {
-  const engines = /Android|iPhone|iPad|iPod/.test(navigator.userAgent)
+  const engines = isMobileBrowser()
     ? [nativeSpeech, googleSpeech]
     : [googleSpeech, nativeSpeech];
   for (const engine of engines) {

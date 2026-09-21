@@ -47,9 +47,9 @@ Browser scripts are sequential and stateful: Library → Import → Review. Sett
 
 ## Mobile action-position follow-up
 
-The mobile action row is fixed above the bottom navigation for review, add/edit, CSV confirmation, detail navigation, pagination and results. Main content reserves both rows. The primary review action occupies the same right-hand slot for reveal, self-rating, answer checking and continuing.
+The mobile action row is fixed above the bottom navigation for review, add/edit, CSV confirmation, detail navigation and results. Main content reserves both rows. The primary review action occupies the same right-hand slot for reveal, self-rating, answer checking and continuing.
 
-`tests/browser-stable-actions.js` verifies bounding-box positions (within 1px) after reveal, very long example text, scrolling, next card, incorrect-answer feedback, adding examples, textarea growth, validation and a shorter library page. It also verifies Enter submission after moving the submit button outside the answer form, and simulates a 300px keyboard inset. Real keyboard handling uses VisualViewport events and temporarily hides the app navigation while typing. Physical iOS keyboard behavior remains unverified.
+`tests/browser-stable-actions.js` verifies bounding-box positions (within 1px) after reveal, very long example text, scrolling, next card, incorrect-answer feedback, adding examples, textarea growth and validation. It also verifies Enter submission after moving the submit button outside the answer form, and simulates a 300px keyboard inset. Real keyboard handling uses VisualViewport events and temporarily hides the app navigation while typing. Physical iOS keyboard behavior remains unverified.
 
 ## Not verified live
 

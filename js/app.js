@@ -50,7 +50,6 @@ const state = {
     mode: 'flip_en',
   },
   filters: defaultFilters(),
-  libraryPage: 1,
   libraryFiltersOpen: false,
   customOpen: false,
   previewId: null,
@@ -591,17 +590,8 @@ const actions = {
       el.disabled = false;
     }
   },
-  'prev-page': () => {
-    state.libraryPage--;
-    render();
-  },
-  'next-page': () => {
-    state.libraryPage++;
-    render();
-  },
   'reset-filters': () => {
     state.filters = defaultFilters();
-    state.libraryPage = 1;
     render();
   },
   'toggle-library-filters': () => {
@@ -712,7 +702,6 @@ root.addEventListener('change', async (event) => {
     } catch {}
     state.filters = defaultFilters();
     state.settings.category = 'ALL';
-    state.libraryPage = 1;
     state.page = ['today', 'library', 'settings'].includes(state.page)
       ? state.page
       : 'today';
@@ -733,7 +722,6 @@ root.addEventListener('change', async (event) => {
     render();
   } else if (el.closest('#library-filters') && el.name !== 'search') {
     state.filters[el.name] = el.type === 'checkbox' ? el.checked : el.value;
-    state.libraryPage = 1;
     render();
   } else if (el.id === 'csv-file') await importFile(el.files[0]);
 });
@@ -742,7 +730,6 @@ root.addEventListener('input', (event) => {
   if (el.name === 'search') {
     const pos = el.selectionStart;
     state.filters.search = el.value;
-    state.libraryPage = 1;
     render();
     const next = root.querySelector('[name="search"]');
     next.focus();

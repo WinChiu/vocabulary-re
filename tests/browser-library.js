@@ -3,11 +3,9 @@ async (page) => {
   const check=async(condition,label)=>{if(!await condition)throw new Error(label);results.push(label);};
   await page.setViewportSize({width:1440,height:1000});
   await page.getByRole('button',{name:/Library/}).click();
-  await check(page.locator('.word-row').count().then(n=>n===15),'Library: 15 rows per page');
-  await page.getByRole('button',{name:'Next page',exact:true}).click();
-  await check(page.locator('.word-row').count().then(n=>n===5),'Library: second page');
+  await check(page.locator('.word-row').count().then(n=>n===20),'Library: lists every word without pagination');
   await page.getByRole('textbox',{name:'Search library'}).fill('SERENDIPITY');
-  await check(page.locator('.word-row').count().then(n=>n===1),'Search resets pagination and ignores case');
+  await check(page.locator('.word-row').count().then(n=>n===1),'Search filters and ignores case');
   await page.getByRole('button',{name:'serendipity 意外發現美好事物的運氣',exact:false}).click();
   await check(page.getByRole('heading',{name:'serendipity',exact:true}).isVisible(),'Open detail');
   await page.getByRole('button',{name:'Next word',exact:true}).click();

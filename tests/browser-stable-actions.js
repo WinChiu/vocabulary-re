@@ -50,9 +50,6 @@ async(page)=>{
   await page.getByRole('button',{name:'Exit session',exact:false}).click();
   await page.getByRole('button',{name:'Leave session',exact:true}).click();
   await page.getByRole('button',{name:'Library',exact:true}).click();
-  const paging=await box('.pagination');
-  await page.getByRole('button',{name:'Next page',exact:true}).click();
-  same(paging,await box('.pagination'),'Pagination does not move on shorter page');
   await page.getByRole('button',{name:'Add word',exact:true}).click();
   const save=await box('#card-form [type="submit"]');
   for(let i=0;i<4;i++)await page.getByRole('button',{name:'Add another example'}).click();

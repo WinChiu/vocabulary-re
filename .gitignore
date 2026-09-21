@@ -3,3 +3,4 @@ node_modules/
 output/
 .playwright-cli/
 .env
+service-account*.json
