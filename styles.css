@@ -94,14 +94,14 @@ main#main{max-width:1200px;min-height:calc(100vh - 66px);padding-bottom:calc(96p
 /* Page identity without an extra app header. */
 :root{--nav-safe-bottom:max(16px, env(safe-area-inset-bottom, 0px));--nav-height:calc(58px + var(--nav-safe-bottom))}
 main#main{min-height:100dvh;padding-top:35px;padding-bottom:calc(var(--nav-height) + 28px)}
-.page-heading,.page-heading.compact{padding-bottom:16px;margin-bottom:24px;border-bottom:1px solid #dde3d4;align-items:center}
+.page-heading,.page-heading.compact{margin-bottom:24px;align-items:center}
 .page-heading h1,.page-heading.compact h1{position:relative;font-family:var(--serif);font-size:43px;font-weight:400;line-height:1;letter-spacing:-.8px;padding-left:0}
 
 .bottom-nav{height:var(--nav-height);padding-top:5px;padding-bottom:var(--nav-safe-bottom)}
 #toast{bottom:calc(var(--nav-height) + 14px)}
 @media(max-width:600px){
   main#main{padding-top:max(24px, env(safe-area-inset-top, 0px));padding-bottom:calc(var(--nav-height) + 25px)}
-  .page-heading,.page-heading.compact{padding-bottom:13px;margin-bottom:20px}
+  .page-heading,.page-heading.compact{margin-bottom:20px}
   .page-heading h1,.page-heading.compact h1{font-size:36px;padding-left:0;letter-spacing:-.5px}
   
   .bottom-nav{height:var(--nav-height);padding-bottom:var(--nav-safe-bottom)}
@@ -180,3 +180,8 @@ main#main{min-height:100dvh;padding-top:35px;padding-bottom:calc(var(--nav-heigh
 @media(max-width:600px){
   #main[data-page="library"]>.library-heading{margin-right:max(8px,env(safe-area-inset-right,0px))}
 }
+
+/* Full-bleed list kept flat; color a few key bands so sections stay easy to tell apart. */
+.list-heading{background:var(--soft);border-top:1px solid var(--line);border-bottom:1px solid var(--line);color:#5c6b52;font-weight:600}
+.library-panel .word-row{background:var(--paper)}
+.pagination{background:var(--soft);border-top:1px solid var(--line)}

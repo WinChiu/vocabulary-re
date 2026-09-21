@@ -1,6 +1,6 @@
 export const MODES = {
-  flip_en: 'Flip card · EN → ZH',
-  flip_zh: 'Flip card · ZH → EN',
+  flip_en: 'Flip card · Word → ZH',
+  flip_zh: 'Flip card · ZH → Word',
   spelling: 'Spelling',
   fill_blank: 'Cloze',
 };
