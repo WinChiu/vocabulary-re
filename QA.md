@@ -1,6 +1,18 @@
 # Verification report
 
-Verified 2026-09-21 against the local app on port 4187. All mutations below used the in-memory demo, never production Firestore.
+Verified 2026-09-21 against the local app on port 4187 and subsequently the deployed GitHub Pages site. All automated content mutations used the in-memory demo, never production Firestore.
+
+## Production deployment verification
+
+- Repository created: https://github.com/WinChiu/vocabulary-re (public).
+- Site: https://winchiu.github.io/vocabulary-re/ (HTTP 200, HTTPS).
+- Successful Actions run: https://github.com/WinChiu/vocabulary-re/actions/runs/35577968851. Application commit: `768bced5782b7181b742eef976ba8ee72a090b46`.
+- All 31 logic tests passed in GitHub's Linux runner. The initial run reached `configure-pages` before Pages was enabled; the subsequent run succeeded after configuration.
+- Production Firebase module initializes Authentication and Firestore for `vocabulary-f8603`; its real configuration is injected from the repository secret and is absent from Git history.
+- The Firebase authorized-domain configuration includes `winchiu.github.io`.
+- An unauthenticated Firestore read returned `permission-denied`, as expected. No production records were written.
+- Clicking the live Google sign-in button opened `accounts.google.com` with account selection. Completing Google authentication requires the account owner; authenticated database reads/writes are not yet verified by the agent.
+- On the live site's isolated demo, actual CSV parsing returned 1 ready / 2 duplicates / 1 invalid, import succeeded, a complete review saved its mock result, and the sample CSV returned HTTP 200. No page-level JavaScript errors occurred in these smoke checks.
 
 ## Automated logic: 31 tests passed
 
@@ -41,8 +53,7 @@ The mobile action row is fixed above the bottom navigation for review, add/edit,
 
 ## Not verified live
 
-- Real Google popup login, browser-local Firebase authentication persistence, actual Firestore permission rules and cloud reads/writes: Firebase configuration was not provided.
-- Real GitHub Pages deployment and repository secret configuration: workflow supplied, no public deployment performed.
+- Completing Google sign-in, browser-local Firebase authentication persistence and authenticated cloud reads/writes still require the account owner. Firebase initialization, the Google popup handoff, unauthenticated denial, the Actions secret and the Pages deployment have been verified live.
 - Physical iPhone Safari home-indicator behavior and audible device TTS: responsive layout and a 34px inset were simulated in a desktop browser. Audio failure paths and language mapping were verified; actual sound quality is device-dependent.
 - Real Google TTS endpoint availability is not guaranteed; it is unofficial. The specified fallback is implemented.
 

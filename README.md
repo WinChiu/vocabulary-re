@@ -2,6 +2,12 @@
 
 A static vocabulary review app for English and Swedish, built with native JavaScript ES modules. No application backend, bundler, or build step is required.
 
+Live site: **https://winchiu.github.io/vocabulary-re/**
+
+Repository: https://github.com/WinChiu/vocabulary-re
+
+Production uses Firebase project `vocabulary-f8603`. Its configuration is supplied through the repository's encrypted `FIREBASE_CONFIG_CONTENT` Actions secret; the real local configuration remains gitignored.
+
 ## Run locally
 
 Requires Node.js 22 or newer. No npm install is needed for the app or unit tests.
@@ -57,7 +63,7 @@ The app uses Firebase SDK 12.7.0 from gstatic, SheetJS 0.20.3 from its CDN, and 
 
 ## Deploy
 
-The supplied GitHub Actions workflow targets GitHub Pages on a push to `main` or a manual run. Set Pages to use GitHub Actions and add the repository secret `FIREBASE_CONFIG_CONTENT`, containing the complete real `firebase-config.js` module. The workflow runs unit tests, stages only app assets, injects the configuration, and deploys. No deployment has been performed as part of implementation.
+The supplied GitHub Actions workflow targets GitHub Pages on a push to `main` or a manual run. Pages and the repository secret `FIREBASE_CONFIG_CONTENT` are configured for this repository. The secret contains the complete real `firebase-config.js` module. The workflow runs unit tests, stages only app assets, injects the configuration, and deploys. The first successful deployment was verified on 2026-09-21: https://github.com/WinChiu/vocabulary-re/actions/runs/35577968851.
 
 ## Test
 
