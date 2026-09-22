@@ -46,6 +46,12 @@ approval, but the user should know a recovery point exists.
 
 ## Notes
 
+- `backup` is the one command that always does a **full** collection
+  read (one billed read per card) — it's meant to be an authoritative
+  snapshot. It also refreshes the local cache (`backups/cache-<lang>.json`)
+  used by the other commands. Don't run it just to look at the library;
+  use `list`/`find` (optionally `--offline`) for that. The `cache-*.json`
+  files are not backups — don't treat them as recovery points.
 - The backup is a **raw dump**, not a validated export — it includes every
   field as stored (`review_stats`, `created_at`/`updated_at` as Firestore
   timestamp objects, etc.), so it's suitable for manual inspection or a

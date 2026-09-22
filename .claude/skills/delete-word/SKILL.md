@@ -28,6 +28,11 @@ word from scratch with fresh review history.
    node scripts/add-word.mjs find --lang en --word tacit
    ```
 
+   `find` is a cheap incremental sync by default. If you already synced
+   in this session, `--offline` avoids Firestore entirely; `delete` itself
+   re-syncs before deleting, so a stale lookup can't delete the wrong card
+   (a card deleted elsewhere just fails with "No card with id").
+
    - Zero matches → tell the user, stop.
    - Multiple matches → ask the user which one they mean.
    - One match → proceed to confirmation.
@@ -56,6 +61,10 @@ word from scratch with fresh review history.
 
 ## Notes
 
+- Reads go through the local cache (`backups/cache-<lang>.json`) with an
+  incremental sync, not a full collection read — see the add-word skill's
+  "Firestore reads & the local cache" section for `--offline` /
+  `--refresh` and the `sync` field in every result.
 - Consider suggesting a `backup-library` export first if the user is about
   to delete several words at once, or if this is the first destructive
   operation you're doing on their library this session.

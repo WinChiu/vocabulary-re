@@ -25,6 +25,43 @@ export function chunks(items, size = 450) {
     items.slice(i * size, (i + 1) * size),
   );
 }
+// Incremental sync of a cached card list (saves Firestore reads): fetch only
+// cards changed since the last sync, and compare a server-side count to catch
+// deletions made elsewhere; any mismatch falls back to one full fetch.
+export async function syncCards(cached, { fetchAll, fetchSince, count }) {
+  let cards;
+  if (cached?.cards) {
+    const byId = new Map(cached.cards.map((c) => [c.id, c]));
+    for (const c of await fetchSince(cached.lastSync || 0)) byId.set(c.id, c);
+    if ((await count()) === byId.size) cards = [...byId.values()];
+  }
+  cards ??= await fetchAll();
+  const lastSync = cards.reduce(
+    (max, c) => Math.max(max, new Date(c.updated_at || 0).getTime() || 0),
+    cached?.lastSync || 0,
+  );
+  return { cards, lastSync };
+}
+// JSON round-trip that keeps Date values (cards carry Dates after convert()).
+export function packCards(value) {
+  if (value instanceof Date) return { $date: value.getTime() };
+  if (Array.isArray(value)) return value.map(packCards);
+  if (value && typeof value === 'object')
+    return Object.fromEntries(
+      Object.entries(value).map(([k, v]) => [k, packCards(v)]),
+    );
+  return value;
+}
+export function unpackCards(value) {
+  if (Array.isArray(value)) return value.map(unpackCards);
+  if (value && typeof value === 'object') {
+    if (typeof value.$date === 'number') return new Date(value.$date);
+    return Object.fromEntries(
+      Object.entries(value).map(([k, v]) => [k, unpackCards(v)]),
+    );
+  }
+  return value;
+}
 export class MockStore {
   constructor() {
     this.collections = { en: mockCards('en'), sv: mockCards('sv') };

@@ -28,7 +28,10 @@ ad hoc scripts because the CLI had no bulk primitive; it now does.
    node scripts/add-word.mjs find --lang en --word tacit
    ```
 
-   Returns `{"ok":true,"matches":[{...}]}`. If `matches` is empty, tell the
+   Returns `{"ok":true,"matches":[{...}],"sync":{...}}` — a cheap
+   incremental sync, or zero Firestore calls with `--offline` if the cache
+   is already fresh this session. `update` re-syncs before writing either
+   way. If `matches` is empty, tell the
    user the word wasn't found — don't fall back to creating it (that's the
    `add-word` skill's job, and doing it here would be a surprise action the
    user didn't ask for). If more than one match comes back, ask the user
@@ -73,6 +76,10 @@ ad hoc scripts because the CLI had no bulk primitive; it now does.
 
 ## Notes
 
+- Reads go through the local cache (`backups/cache-<lang>.json`) with an
+  incremental sync, not a full collection read — see the add-word skill's
+  "Firestore reads & the local cache" section for `--offline` /
+  `--refresh` and the `sync` field in every result.
 - `review_stats`, `created_at`, and the document `id` are never touched by
   `update` — only the edited fields plus `updated_at` change. Review
   progress (mastery level, next review date) survives edits.
@@ -99,7 +106,9 @@ is easy to get subtly wrong). Use the two purpose-built commands instead:
 
    Returns `{"ok":true,"count":N,"cards":[{"id","word_en","category","meaning_zh"},...]}`,
    sorted alphabetically. Use this instead of `find` when you need the
-   whole library rather than one word.
+   whole library rather than one word. It is served from the local cache
+   (incremental sync), so listing a large library does not cost one read
+   per card; add `--offline` for zero reads.
 
 2. **Decide the new value for every word** and present the classification
    scheme to the user for approval first (same reasoning as single-word
@@ -120,7 +129,8 @@ is easy to get subtly wrong). Use the two purpose-built commands instead:
      including `review_stats`, is left alone — same guarantee as `update`.
    - Returns `{"ok":true,"updated":N,"notFound":[...],"counts":{...}}`.
      `notFound` lists map keys that didn't match any card (typo guard);
-     `counts` is the post-write tally per category — check it against
+     `counts` is the post-write tally per category, computed from the
+     local cache mirror of the write (no full re-read) — check it against
      what you expected before reporting success.
    - This command only ever touches the `category` field. It's not a
      general bulk-patch tool — if the user needs to bulk-edit some other

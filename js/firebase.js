@@ -10,6 +10,9 @@ import {
 import {
   collection,
   getDocs,
+  getCountFromServer,
+  query,
+  where,
   doc,
   setDoc,
   updateDoc,
@@ -19,7 +22,7 @@ import {
 } from 'https://www.gstatic.com/firebasejs/12.7.0/firebase-firestore.js';
 import { app, db } from './firebase-config.js';
 import { LANGUAGES, initialStats, sortCards } from './core.js';
-import { callWithTimeout, chunks } from './data.js';
+import { callWithTimeout, chunks, syncCards, packCards, unpackCards } from './data.js';
 import { GOOGLE_CLIENT_ID, loadGoogleIdentity, createGoogleLogin } from './google-login.js';
 const auth = getAuth(app);
 let googleLogin;
@@ -40,7 +43,39 @@ export function login() {
   if (!googleLogin) return Promise.reject(Object.assign(new Error('Sign-in is loading. Please try again in a moment.'), {code:'auth/not-ready'}));
   return googleLogin();
 }
-export const logout = () => signOut(auth);
+// Per-user card cache in localStorage, so reloading the library only reads
+// cards that changed instead of the whole collection. Best-effort: any storage
+// failure just means a full fetch.
+const CACHE_PREFIX = 'jw-cards:';
+const cacheKey = (lang) => `${CACHE_PREFIX}${auth.currentUser?.uid || 'anon'}:${lang}`;
+function readCache(lang) {
+  try {
+    const raw = localStorage.getItem(cacheKey(lang));
+    return raw ? unpackCards(JSON.parse(raw)) : null;
+  } catch {
+    return null;
+  }
+}
+function writeCache(lang, value) {
+  try {
+    localStorage.setItem(cacheKey(lang), JSON.stringify(packCards(value)));
+  } catch {
+    try {
+      localStorage.removeItem(cacheKey(lang));
+    } catch {}
+  }
+}
+function clearCaches() {
+  try {
+    Object.keys(localStorage)
+      .filter((k) => k.startsWith(CACHE_PREFIX))
+      .forEach((k) => localStorage.removeItem(k));
+  } catch {}
+}
+export const logout = () => {
+  clearCaches();
+  return signOut(auth);
+};
 function convert(value) {
   if (value?.toDate) return value.toDate();
   if (Array.isArray(value)) return value.map(convert);
@@ -57,10 +92,22 @@ export class FirebaseStore {
       : collection(db, LANGUAGES[lang].collection);
   }
   async list(lang) {
-    const data = await callWithTimeout(getDocs(this.ref(lang)));
-    return sortCards(
-      data.docs.map((d) => ({ ...convert(d.data()), id: d.id })),
-    );
+    const ref = this.ref(lang);
+    const toCards = (data) =>
+      data.docs.map((d) => ({ ...convert(d.data()), id: d.id }));
+    const synced = await syncCards(readCache(lang), {
+      fetchAll: async () => toCards(await callWithTimeout(getDocs(ref))),
+      fetchSince: async (ms) =>
+        toCards(
+          await callWithTimeout(
+            getDocs(query(ref, where('updated_at', '>=', new Date(ms)))),
+          ),
+        ),
+      count: async () =>
+        (await callWithTimeout(getCountFromServer(ref))).data().count,
+    });
+    writeCache(lang, synced);
+    return sortCards(synced.cards);
   }
   async save(lang, id, value) {
     if (id)
@@ -79,8 +126,12 @@ export class FirebaseStore {
       }),
     );
   }
-  remove(lang, id) {
-    return callWithTimeout(deleteDoc(this.ref(lang, id)));
+  async remove(lang, id) {
+    await callWithTimeout(deleteDoc(this.ref(lang, id)));
+    // Drop it locally too, or the next sync's count check would force a full fetch.
+    const cached = readCache(lang);
+    if (cached?.cards)
+      writeCache(lang, { ...cached, cards: cached.cards.filter((c) => c.id !== id) });
   }
   async importCards(lang, entries, onProgress = () => {}) {
     for (const group of chunks(entries)) {

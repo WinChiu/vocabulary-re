@@ -7,6 +7,7 @@ import os from 'node:os';
 import { initializeApp, cert } from 'firebase-admin/app';
 import { getFirestore, FieldValue } from 'firebase-admin/firestore';
 import { LANGUAGES, categories, validateCard, initialStats, normalize } from '../js/core.js';
+import { loadCards } from './card-cache.mjs';
 
 function fail(message) {
   console.log(JSON.stringify({ ok: false, error: message }));
@@ -25,7 +26,7 @@ function parseFlags(argv) {
     const arg = argv[i];
     if (!arg.startsWith('--')) continue;
     const key = arg.slice(2);
-    if (key === 'starred' || key === 'allow-partial') {
+    if (key === 'starred' || key === 'allow-partial' || key === 'offline' || key === 'refresh') {
       flags[key] = true;
       continue;
     }
@@ -57,37 +58,47 @@ function loadServiceAccount() {
   }
 }
 
+let firestoreInstance;
 function db() {
-  const serviceAccount = loadServiceAccount();
-  initializeApp({ credential: cert(serviceAccount) });
-  return getFirestore();
+  if (!firestoreInstance) {
+    const serviceAccount = loadServiceAccount();
+    initializeApp({ credential: cert(serviceAccount) });
+    firestoreInstance = getFirestore();
+  }
+  return firestoreInstance;
+}
+
+// Cards come from the local cache (backups/cache-<lang>.json), synced
+// incrementally; --offline skips Firestore entirely (read-only commands only).
+function cards(language, flags, { allowOffline = false } = {}) {
+  return loadCards(language, () => db().collection(LANGUAGES[language].collection), {
+    offline: allowOffline && !!flags.offline,
+    refresh: !!flags.refresh,
+  });
 }
 
 async function runList(flags) {
   const language = flags.lang;
   if (!LANGUAGES[language])
     return fail(`Unknown language "${language}". Use "en" or "sv".`);
-  const firestore = db();
-  const snapshot = await firestore.collection(LANGUAGES[language].collection).get();
-  const cards = snapshot.docs.map((d) => d.data());
-  console.log(JSON.stringify({ ok: true, categories: categories(cards) }));
+  const store = await cards(language, flags, { allowOffline: true });
+  console.log(JSON.stringify({ ok: true, categories: categories(store.cards), sync: store.sync }));
 }
 
 async function runDump(flags) {
   const language = flags.lang;
   if (!LANGUAGES[language])
     return fail(`Unknown language "${language}". Use "en" or "sv".`);
-  const firestore = db();
-  const snapshot = await firestore.collection(LANGUAGES[language].collection).get();
-  const cards = snapshot.docs
-    .map((d) => ({
-      id: d.id,
-      word_en: d.data().word_en,
-      category: d.data().category || '',
-      meaning_zh: d.data().meaning_zh,
+  const store = await cards(language, flags, { allowOffline: true });
+  const list = store.cards
+    .map((c) => ({
+      id: c.id,
+      word_en: c.word_en,
+      category: c.category || '',
+      meaning_zh: c.meaning_zh,
     }))
     .sort((a, b) => normalize(a.word_en).localeCompare(normalize(b.word_en)));
-  console.log(JSON.stringify({ ok: true, count: cards.length, cards }));
+  console.log(JSON.stringify({ ok: true, count: list.length, cards: list, sync: store.sync }));
 }
 
 async function runBulkCategory(flags) {
@@ -104,10 +115,10 @@ async function runBulkCategory(flags) {
     return fail('--json must be valid JSON.');
   }
 
+  const store = await cards(language, flags);
   const firestore = db();
   const collectionRef = firestore.collection(LANGUAGES[language].collection);
-  const snapshot = await collectionRef.get();
-  const existing = snapshot.docs.map((d) => ({ id: d.id, ...d.data() }));
+  const existing = store.cards;
 
   const byWord = new Map(existing.map((c) => [normalize(c.word_en), c]));
   const mappedWords = new Set(Object.keys(map).map(normalize));
@@ -133,6 +144,7 @@ async function runBulkCategory(flags) {
       category: String(category || '').trim(),
       updated_at: FieldValue.serverTimestamp(),
     });
+    store.upsert({ id: card.id, category: String(category || '').trim() });
     updated++;
     ops++;
     if (ops === 450) {
@@ -142,15 +154,15 @@ async function runBulkCategory(flags) {
     }
   }
   if (ops > 0) await batch.commit();
+  store.save();
 
-  const verifySnapshot = await collectionRef.get();
   const counts = {};
-  for (const d of verifySnapshot.docs) {
-    const c = (d.data().category || '').trim() || '(none)';
+  for (const card of store.cards) {
+    const c = (card.category || '').trim() || '(none)';
     counts[c] = (counts[c] || 0) + 1;
   }
 
-  console.log(JSON.stringify({ ok: true, language, updated, notFound, counts }));
+  console.log(JSON.stringify({ ok: true, language, updated, notFound, counts, sync: store.sync }));
 }
 
 async function runAdd(flags, argv) {
@@ -175,22 +187,20 @@ async function runAdd(flags, argv) {
   if (!LANGUAGES[language])
     return fail(`Unknown language "${language}". Use "en" or "sv".`);
 
-  const firestore = db();
-  const collectionRef = firestore.collection(LANGUAGES[language].collection);
-  const snapshot = await collectionRef.get();
-  const existing = snapshot.docs.map((d) => ({ id: d.id, ...d.data() }));
-
-  const { value, error } = validateCard(input, existing);
+  const store = await cards(language, flags);
+  const { value, error } = validateCard(input, store.cards);
   if (error) return fail(error);
 
-  const docRef = await collectionRef.add({
+  const docRef = await db().collection(LANGUAGES[language].collection).add({
     ...value,
     review_stats: initialStats(),
     created_at: FieldValue.serverTimestamp(),
     updated_at: FieldValue.serverTimestamp(),
   });
+  store.upsert({ id: docRef.id, ...value, review_stats: initialStats() });
+  store.save();
 
-  console.log(JSON.stringify({ ok: true, id: docRef.id, language, card: value }));
+  console.log(JSON.stringify({ ok: true, id: docRef.id, language, card: value, sync: store.sync }));
 }
 
 async function runFind(flags) {
@@ -199,16 +209,15 @@ async function runFind(flags) {
     return fail(`Unknown language "${language}". Use "en" or "sv".`);
   if (!flags.word) return fail('Provide --word to search for.');
 
-  const firestore = db();
-  const snapshot = await firestore.collection(LANGUAGES[language].collection).get();
-  const cards = snapshot.docs.map((d) => ({ id: d.id, ...d.data() }));
+  const store = await cards(language, flags, { allowOffline: true });
+  const all = store.cards;
   const query = normalize(flags.word);
-  const exact = cards.filter((c) => normalize(c.word_en) === query);
+  const exact = all.filter((c) => normalize(c.word_en) === query);
   const matches = exact.length
     ? exact
-    : cards.filter((c) => normalize(c.word_en).includes(query));
+    : all.filter((c) => normalize(c.word_en).includes(query));
 
-  console.log(JSON.stringify({ ok: true, matches }));
+  console.log(JSON.stringify({ ok: true, matches, sync: store.sync }));
 }
 
 async function runUpdate(flags) {
@@ -216,10 +225,9 @@ async function runUpdate(flags) {
   if (!LANGUAGES[language])
     return fail(`Unknown language "${language}". Use "en" or "sv".`);
 
-  const firestore = db();
-  const collectionRef = firestore.collection(LANGUAGES[language].collection);
-  const snapshot = await collectionRef.get();
-  const existing = snapshot.docs.map((d) => ({ id: d.id, ...d.data() }));
+  const store = await cards(language, flags);
+  const collectionRef = db().collection(LANGUAGES[language].collection);
+  const existing = store.cards;
 
   let id = flags.id;
   if (!id) {
@@ -252,8 +260,10 @@ async function runUpdate(flags) {
     ...value,
     updated_at: FieldValue.serverTimestamp(),
   });
+  store.upsert({ id, ...value });
+  store.save();
 
-  console.log(JSON.stringify({ ok: true, id, language, card: value }));
+  console.log(JSON.stringify({ ok: true, id, language, card: value, sync: store.sync }));
 }
 
 async function runDelete(flags) {
@@ -261,10 +271,9 @@ async function runDelete(flags) {
   if (!LANGUAGES[language])
     return fail(`Unknown language "${language}". Use "en" or "sv".`);
 
-  const firestore = db();
-  const collectionRef = firestore.collection(LANGUAGES[language].collection);
-  const snapshot = await collectionRef.get();
-  const existing = snapshot.docs.map((d) => ({ id: d.id, ...d.data() }));
+  const store = await cards(language, flags);
+  const collectionRef = db().collection(LANGUAGES[language].collection);
+  const existing = store.cards;
 
   let id = flags.id;
   if (!id) {
@@ -287,6 +296,8 @@ async function runDelete(flags) {
   if (!current) return fail(`No card with id "${id}" in this language.`);
 
   await collectionRef.doc(id).delete();
+  store.remove(id);
+  store.save();
 
   console.log(
     JSON.stringify({
@@ -298,6 +309,7 @@ async function runDelete(flags) {
         meaning_zh: current.meaning_zh,
         category: current.category || '',
       },
+      sync: store.sync,
     }),
   );
 }
@@ -309,11 +321,11 @@ async function runBackup(flags) {
     if (!LANGUAGES[l]) return fail(`Unknown language "${l}". Use "en", "sv", or "all".`);
   }
 
-  const firestore = db();
+  // A backup is an explicit full snapshot, so it always does a full read
+  // (which also refreshes the local cache).
   const snapshot_by_lang = {};
   for (const l of langs) {
-    const snapshot = await firestore.collection(LANGUAGES[l].collection).get();
-    snapshot_by_lang[l] = snapshot.docs.map((d) => ({ id: d.id, ...d.data() }));
+    snapshot_by_lang[l] = (await cards(l, { refresh: true })).cards;
   }
 
   const exportedAt = new Date().toISOString();
@@ -354,10 +366,10 @@ async function runBulkAdd(flags) {
   }
   if (!Array.isArray(entries)) return fail('--json must be a JSON array of card objects.');
 
+  const store = await cards(language, flags);
   const firestore = db();
   const collectionRef = firestore.collection(LANGUAGES[language].collection);
-  const snapshot = await collectionRef.get();
-  const existing = snapshot.docs.map((d) => ({ id: d.id, ...d.data() }));
+  const existing = store.cards;
 
   const added = [];
   const skipped = [];
@@ -379,6 +391,7 @@ async function runBulkAdd(flags) {
     });
     added.push({ id: docRef.id, word_en: value.word_en });
     existing.push({ id: docRef.id, ...value });
+    store.upsert({ id: docRef.id, ...value, review_stats: initialStats() });
     ops++;
     if (ops === 450) {
       await batch.commit();
@@ -387,8 +400,9 @@ async function runBulkAdd(flags) {
     }
   }
   if (ops > 0) await batch.commit();
+  store.save();
 
-  console.log(JSON.stringify({ ok: true, language, addedCount: added.length, added, skipped }));
+  console.log(JSON.stringify({ ok: true, language, addedCount: added.length, added, skipped, sync: store.sync }));
 }
 
 async function main() {
@@ -403,7 +417,7 @@ async function main() {
   if (command === 'backup') return runBackup(flags);
   if (command === 'bulk-category') return runBulkCategory(flags);
   if (command === 'bulk-add') return runBulkAdd(flags);
-  fail('Usage: add-word.mjs add [--json <json> | --lang --word --meaning --category --note --example ... --starred]\n       add-word.mjs categories --lang <en|sv>\n       add-word.mjs list --lang <en|sv>\n       add-word.mjs find --lang <en|sv> --word <text>\n       add-word.mjs update --lang <en|sv> (--id <id> | --word <text>) [--json <json> | --meaning --category --note --example ... --starred]\n       add-word.mjs delete --lang <en|sv> (--id <id> | --word <text>)\n       add-word.mjs backup [--lang <en|sv|all>] [--out <path>]\n       add-word.mjs bulk-category --lang <en|sv> --json \'{"word": "category", ...}\' [--allow-partial]\n       add-word.mjs bulk-add --lang <en|sv> --json \'[{"word_en":"...","meaning_zh":"...","example_en":["..."]}, ...]\'');
+  fail('Usage: add-word.mjs add [--json <json> | --lang --word --meaning --category --note --example ... --starred]\n       add-word.mjs categories --lang <en|sv> [--offline]\n       add-word.mjs list --lang <en|sv> [--offline]\n       add-word.mjs find --lang <en|sv> --word <text> [--offline]\n       (any command: --refresh forces a full re-read into the local cache)\n       add-word.mjs update --lang <en|sv> (--id <id> | --word <text>) [--json <json> | --meaning --category --note --example ... --starred]\n       add-word.mjs delete --lang <en|sv> (--id <id> | --word <text>)\n       add-word.mjs backup [--lang <en|sv|all>] [--out <path>]\n       add-word.mjs bulk-category --lang <en|sv> --json \'{"word": "category", ...}\' [--allow-partial]\n       add-word.mjs bulk-add --lang <en|sv> --json \'[{"word_en":"...","meaning_zh":"...","example_en":["..."]}, ...]\'');
 }
 
 main().catch((err) => fail(err.message));

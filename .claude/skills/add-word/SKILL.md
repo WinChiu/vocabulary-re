@@ -29,6 +29,34 @@ If this fails, stop and tell the user to:
 
 Do not attempt to generate or download this key yourself.
 
+## Firestore reads & the local cache
+
+The user wants to keep Firestore read usage (billed per document) low.
+`scripts/add-word.mjs` therefore keeps a local copy of each collection at
+`backups/cache-<lang>.json` (gitignored) and never re-reads the whole
+collection on every command:
+
+- **First run per language** (no cache yet): one full read, cache written.
+- **Every later run**: fetches only cards with `updated_at` newer than the
+  last sync (edits/reviews made in the app included), plus one `count()`
+  query to detect cards deleted elsewhere. Typically a handful of reads.
+  A count mismatch triggers one automatic full re-read.
+- **`--offline`** (`categories`, `list`, `find` only): reads the cache
+  with **zero** Firestore calls. Use it when the user just wants to browse
+  or look something up and slightly stale data is fine. It errors if no
+  cache exists yet — then run once without it.
+- **`--refresh`** (any command): forces a full re-read. Only use it if
+  the cache looks wrong; it costs one read per card.
+- Write commands (`add`, `update`, `delete`, `bulk-*`) always do the
+  cheap incremental sync first (ignore `--offline`), so duplicate checks
+  are against current data, then mirror their own writes into the cache.
+- Every JSON result includes a `sync` field (`mode`: `offline` /
+  `incremental` / `full`, approximate `reads`) — mention it if the user
+  asks about usage, and flag it if you see unexpected `full` syncs.
+
+Don't write ad-hoc scripts that call `collection(...).get()` to look at the
+library — use these commands (or `--offline`) instead.
+
 ## Steps
 
 1. **Determine the language.** If the user doesn't say explicitly, ask
@@ -42,7 +70,9 @@ Do not attempt to generate or download this key yourself.
    node scripts/add-word.mjs categories --lang en
    ```
 
-   Returns `{"ok":true,"categories":["...","..."]}`.
+   Returns `{"ok":true,"categories":["...","..."],"sync":{...}}`. Adding
+   `--offline` is fine here if the cache exists — the category list rarely
+   changes, and the `add` step syncs before its duplicate check anyway.
 
 3. **Draft the card.** Fill in every field:
    - `word_en` — the word/phrase as given (required)

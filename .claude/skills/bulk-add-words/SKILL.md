@@ -65,6 +65,12 @@ of N round-trips, and one review step instead of N.
 
 ## Notes
 
+- Reads go through the local cache (`backups/cache-<lang>.json`) with an
+  incremental sync, not a full collection read — see the add-word skill's
+  "Firestore reads & the local cache" section for `--offline` /
+  `--refresh` and the `sync` field in every result.
+- `bulk-add` syncs the cache once before validating, so the duplicate
+  check costs a few reads regardless of batch size or library size.
 - Validation happens per-word: one bad entry (e.g. missing meaning) is
   skipped and reported, it does **not** block the rest of the batch from
   being added.
