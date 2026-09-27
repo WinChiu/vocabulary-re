@@ -7,10 +7,46 @@ import {
   LANGUAGES,
   POS,
   sensesOf,
+  INFLECTIONS,
+  GENDERS,
 } from './core.js';
 import { acceptedForms, highlight } from './review.js';
 const pos = (p) => (p ? `<span class="pos">${e(p)}</span>` : '');
 const senseLine = (s) => `${pos(s.pos)}${e(s.meaning_zh)}`;
+function inflectionTable(card) {
+  const rows = Object.entries(INFLECTIONS).filter(([p]) => card.inflection?.[p]);
+  return rows.length
+    ? `<div class="inflection">${rows
+        .map(
+          ([p, fields]) =>
+            `<div class="inflection-row">${pos(p)}<dl>${fields
+              .filter(([key]) => card.inflection[p][key])
+              .map(([key, label]) => `<div><dt>${e(label)}</dt><dd>${e(card.inflection[p][key])}</dd></div>`)
+              .join('')}</dl></div>`,
+        )
+        .join('')}</div>`
+    : '';
+}
+function inflectionEditor(state, c) {
+  const posList = [...new Set(c.senses.map((s) => s.pos))].filter((p) => INFLECTIONS[p]);
+  if (state.language !== 'sv' && !Object.keys(c.inflection || {}).length) return '';
+  if (!posList.length)
+    return `<p class="inflection-hint">Pick a part of speech (n., v., adj.) to fill in its inflection table.</p>`;
+  return posList
+    .map(
+      (p) =>
+        `<fieldset class="inflection-editor"><div class="sense-head"><span class="sense-index">Inflection · ${e(p)}</span></div><div class="inflection-fields">${INFLECTIONS[p]
+          .map(([key, label]) => {
+            const v = c.inflection?.[p]?.[key] || '';
+            const attrs = `name="infl" data-pos="${e(p)}" data-key="${key}" aria-label="${e(label)} (${e(p)})"`;
+            return key === 'gender'
+              ? `<label class="field">${e(label)}<select ${attrs}><option value="">—</option>${GENDERS.map((g) => `<option value="${g}" ${v === g ? 'selected' : ''}>${g}</option>`).join('')}</select></label>`
+              : `<label class="field">${e(label)}<input ${attrs} value="${e(v)}"></label>`;
+          })
+          .join('')}</div></fieldset>`,
+    )
+    .join('');
+}
 function rowMeaning(card) {
   const senses = sensesOf(card);
   return `${senses
@@ -127,7 +163,7 @@ function senseEditor(state, s, i, count) {
 }
 export function formView(state) {
   const c = state.draft;
-  return `<div class="narrow">${button('library', icon('arrow-left') + 'Back to library', 'back-link')}<h1>${state.editingId ? 'Edit word' : 'Add word'}</h1><form id="card-form" class="form-card" novalidate><label class="field">Word <span class="required">*</span><input name="word_en" value="${e(c.word_en)}" placeholder="${state.language === 'sv' ? 'e.g. lagom' : 'e.g. serendipity'}" required autofocus><small id="lemma-hint" class="lemma-hint" role="status"></small></label><div class="two-col"><label class="field">Other forms <span class="optional">optional</span><input name="forms" value="${e((c.forms || []).join(', '))}" placeholder="${state.language === 'sv' ? 'e.g. skogen, skogar' : 'e.g. propelled, propelling'}"></label><label class="field">Related words <span class="optional">optional</span><input name="related" value="${e((c.related || []).join(', '))}" placeholder="e.g. scrutinize"></label></div><div class="senses">${c.senses.map((s, i) => senseEditor(state, s, i, c.senses.length)).join('')}</div>${button('add-sense', icon('plus') + 'Add another meaning', 'text-link')}<label class="field">Category <span class="optional">optional</span><input name="category" value="${e(c.category)}" placeholder="e.g. Everyday life" list="existing-categories"><datalist id="existing-categories">${categories(
+  return `<div class="narrow">${button('library', icon('arrow-left') + 'Back to library', 'back-link')}<h1>${state.editingId ? 'Edit word' : 'Add word'}</h1><form id="card-form" class="form-card" novalidate><label class="field">Word <span class="required">*</span><input name="word_en" value="${e(c.word_en)}" placeholder="${state.language === 'sv' ? 'e.g. lagom' : 'e.g. serendipity'}" required autofocus><small id="lemma-hint" class="lemma-hint" role="status"></small></label><div class="two-col"><label class="field">Other forms <span class="optional">optional</span><input name="forms" value="${e((c.forms || []).join(', '))}" placeholder="${state.language === 'sv' ? 'e.g. skogen, skogar' : 'e.g. propelled, propelling'}"></label><label class="field">Related words <span class="optional">optional</span><input name="related" value="${e((c.related || []).join(', '))}" placeholder="e.g. scrutinize"></label></div><div class="senses">${c.senses.map((s, i) => senseEditor(state, s, i, c.senses.length)).join('')}</div>${button('add-sense', icon('plus') + 'Add another meaning', 'text-link')}${inflectionEditor(state, c)}<label class="field">Category <span class="optional">optional</span><input name="category" value="${e(c.category)}" placeholder="e.g. Everyday life" list="existing-categories"><datalist id="existing-categories">${categories(
     state.cards,
   )
     .map((c) => `<option value="${e(c)}">`)
@@ -141,7 +177,7 @@ export function previewView(state, card) {
     highlight(text, accepted)
       .map(([t, hit]) => (hit ? `<mark>${e(t)}</mark>` : e(t)))
       .join('');
-  return `<div class="narrow full-bleed"><div class="detail-top">${button('library', icon('arrow-left') + 'Back to library', 'back-link')}<div class="row-actions">${button('star', icon(card.is_starred ? 'star-fill' : 'star'), `icon-button ${card.is_starred ? 'starred' : ''}`, `data-id="${e(card.id)}" aria-label="${card.is_starred ? 'Unstar' : 'Star'} word"`)}${button('edit', icon('pencil-simple'), 'icon-button', `data-id="${e(card.id)}" aria-label="Edit word"`)}${button('delete', icon('trash'), 'icon-button danger', `data-id="${e(card.id)}" aria-label="Delete word"`)}</div></div><article class="detail-card"><div class="detail-meta">${badge(card)}<span>${e(card.category || 'Uncategorized')}</span></div><div class="detail-title"><h1>${e(card.word_en)}</h1>${button('speak', icon('speaker-high'), 'audio-button', 'aria-label="Play pronunciation"')}</div><div id="dictionary-phonetic"></div>${card.forms?.length ? `<div class="chip-row"><span>Forms</span>${card.forms.map((f) => `<span class="chip">${e(f)}</span>`).join('')}</div>` : ''}<div class="detail-examples detail-senses">${sensesOf(card)
+  return `<div class="narrow full-bleed"><div class="detail-top">${button('library', icon('arrow-left') + 'Back to library', 'back-link')}<div class="row-actions">${button('star', icon(card.is_starred ? 'star-fill' : 'star'), `icon-button ${card.is_starred ? 'starred' : ''}`, `data-id="${e(card.id)}" aria-label="${card.is_starred ? 'Unstar' : 'Star'} word"`)}${button('edit', icon('pencil-simple'), 'icon-button', `data-id="${e(card.id)}" aria-label="Edit word"`)}${button('delete', icon('trash'), 'icon-button danger', `data-id="${e(card.id)}" aria-label="Delete word"`)}</div></div><article class="detail-card"><div class="detail-meta">${badge(card)}<span>${e(card.category || 'Uncategorized')}</span></div><div class="detail-title"><h1>${e(card.word_en)}</h1>${button('speak', icon('speaker-high'), 'audio-button', 'aria-label="Play pronunciation"')}</div><div id="dictionary-phonetic"></div>${inflectionTable(card)}${card.forms?.length ? `<div class="chip-row"><span>Forms</span>${card.forms.map((f) => `<span class="chip">${e(f)}</span>`).join('')}</div>` : ''}<div class="detail-examples detail-senses">${sensesOf(card)
     .map(
       (s) =>
         `<section class="detail-sense"><p class="meaning">${senseLine(s)}</p>${s.example_en.map((x) => `<p class="sense-example">${marked(x)}</p>`).join('')}</section>`,

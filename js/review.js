@@ -1,4 +1,4 @@
-import { normalize, isPhrase, applyResult, sensesOf } from './core.js';
+import { normalize, isPhrase, applyResult, sensesOf, inflectedForms } from './core.js';
 const irregular = {
   be: ['am', 'is', 'are', 'was', 'were', 'been', 'being'],
   go: ['goes', 'went', 'gone', 'going'],
@@ -38,6 +38,7 @@ export function acceptedForms(card, language = 'en') {
     ...new Set([
       ...forms(card.word_en, language),
       ...(card.forms || []).map(normalize),
+      ...inflectedForms(card).map(normalize),
     ]),
   ];
 }

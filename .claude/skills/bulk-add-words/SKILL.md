@@ -35,6 +35,9 @@ of N round-trips, and one review step instead of N.
      part of speech (`pos` uses English codes `n.` `v.` `adj.` …; each
      sense needs a meaning and 1–5 examples in the word's own language).
    - `forms` / `related` — optional; see `add-word`.
+   - `inflection` — required in practice for Swedish words (noun gender +
+     definite/plural forms, verb present/past/supine/imperative, adjective
+     -t/-a forms); see `add-word` for the exact shape. Omit for English.
    - `category` — optional but recommended; reuse an existing one from
      step 2 when it fits.
    - `note` — optional.

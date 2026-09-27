@@ -23,6 +23,7 @@ const emptyDraft = () => ({
   senses: [emptySense()],
   forms: [],
   related: [],
+  inflection: {},
   category: '',
   note: '',
   is_starred: false,
@@ -325,6 +326,13 @@ function captureDraft() {
       .split(/[,，;；]/)
       .map((v) => v.trim())
       .filter(Boolean),
+    inflection: [...form.querySelectorAll('[name="infl"]')].reduce(
+      (acc, el) => {
+        (acc[el.dataset.pos] ||= {})[el.dataset.key] = el.value;
+        return acc;
+      },
+      structuredClone(state.draft.inflection || {}),
+    ),
     category: data.get('category'),
     note: data.get('note'),
     is_starred: data.has('is_starred'),
@@ -760,6 +768,9 @@ root.addEventListener('change', async (event) => {
       : 'today';
     state.cards = [];
     await loadCards();
+  } else if (el.name === 'pos' && el.closest('#card-form')) {
+    captureDraft();
+    render();
   } else if (el.closest('#settings-form')) {
     const f = state.settings;
     f[el.name] =

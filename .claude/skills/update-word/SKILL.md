@@ -54,6 +54,8 @@ ad hoc scripts because the CLI had no bulk primitive; it now does.
      for multi-sense cards the script rejects that and asks for `senses`.
    - Adding a part of speech (append to `senses`), or setting `forms` /
      `related` (full arrays)
+   - Swedish: setting `inflection` (pass the whole object — it replaces
+     the old one; tables for parts of speech not in `senses` are dropped)
    - Changing `category` or `note`
    - Toggling `is_starred`
 

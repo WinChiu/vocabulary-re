@@ -94,3 +94,21 @@ test('cloze matches hyphenated compounds whole and plain words inside them', () 
   assert.equal(clozeFor(card({ word_en: 'notch', example_en: ['The service is top-notch.'] })).answer, 'notch');
   assert.deepEqual(highlight('A top-notch, top-notch day.', ['top-notch']).filter(([, hit]) => hit).length, 2);
 });
+test('inflection tables are validated, feed matching, and render labelled', async () => {
+  const { inflectedForms, wordsOf } = await import('../js/core.js');
+  const raw = card({ word_en: 'dricka', senses: [{ pos: 'v.', meaning_zh: '喝', example_en: ['Vi drack te i går.'] }],
+    inflection: { 'v.': { present: 'dricker', past: 'drack', supine: 'druckit', bogus: 'x' }, 'n.': { gender: 'en', plural: 'drickor' } } });
+  const { value, error } = validateCard(raw);
+  assert.equal(error, '');
+  assert.deepEqual(value.inflection, { 'v.': { present: 'dricker', past: 'drack', supine: 'druckit' } });
+  assert.deepEqual(inflectedForms({ inflection: { 'v.': { past: 'sa/sade' }, 'n.': { gender: 'ett' } } }), ['sa', 'sade']);
+  assert.equal(clozeFor(value, 'sv').answer, 'drack');
+  assert.ok(wordsOf(value).includes('druckit'));
+  assert.equal(validateCard(card({ id: 'x', word_en: 'drack' }), [{ ...value, id: 'd' }]).error.includes('under "dricka"'), true);
+  const noun = validateCard({ word_en: 'artikel', senses: [{ pos: 'n.', meaning_zh: '文章', example_en: ['Artikeln handlar om mat.'] }], inflection: { 'n.': { gender: 'en', definite: 'artikeln', plural: 'artiklar' } } }).value;
+  const html = views.previewView({ language: 'sv' }, { ...noun, id: 'a', review_stats: initialStats() });
+  assert.ok(html.includes('<dt>Gender</dt><dd>en</dd>'));
+  assert.ok(html.includes('<dt>Plural</dt><dd>artiklar</dd>'));
+  assert.ok(html.includes('<mark>Artikeln</mark>'));
+  assert.equal(validateCard({ ...noun, inflection: { 'n.': { gender: 'den' } } }).value.inflection['n.'], undefined);
+});

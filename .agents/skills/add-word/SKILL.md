@@ -98,6 +98,16 @@ library — use these commands (or `--offline`) instead.
      used in the examples, e.g. `["propelled","propelling"]`). Optional.
      Cloze review asks for the exact form in the sentence, so vary the
      forms across examples when it helps.
+   - `inflection` — **Swedish words: fill this in** (English: omit). A
+     labelled table per part of speech that the card has:
+     - `"n."`: `gender` (`en`/`ett`), `definite`, `plural`, `definite_plural`
+     - `"v."`: `present`, `past`, `supine`, `imperative`
+     - `"adj."`: `neuter` (-t form), `plural` (-a form)
+     e.g. `{"n.":{"gender":"en","definite":"artikeln","plural":"artiklar","definite_plural":"artiklarna"}}`.
+     Alternatives go in one cell separated by `/` (`"past":"sa/sade"`);
+     leave a cell out if it doesn't exist (uncountable nouns etc.). These
+     forms are shown as a table on the card and used for cloze/search/
+     duplicate checks, so don't repeat them in `forms`.
    - `related` — derived words with a different spelling that deserve
      their own card (e.g. `scrutinize` for `scrutiny`). Optional.
    - `category` — reuse one from step 2 when it fits; otherwise propose a

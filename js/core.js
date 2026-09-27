@@ -145,7 +145,54 @@ export const formatMeaning = (senses) =>
   senses.length === 1 && !senses[0].pos
     ? senses[0].meaning_zh
     : senses.map((s) => [s.pos, s.meaning_zh].filter(Boolean).join(' ')).join(' / ');
-export const wordsOf = (card) => [card.word_en, ...(card.forms || [])];
+// Labelled inflection table per part of speech (used for Swedish, where the
+// forms are irregular enough to be worth learning). Stored on a card as
+// { "n.": { gender: "en", definite: "artikeln", ... }, "v.": {...} }.
+// A cell may hold alternatives separated by "/" (sa/sade).
+export const INFLECTIONS = {
+  'n.': [
+    ['gender', 'Gender'],
+    ['definite', 'Definite'],
+    ['plural', 'Plural'],
+    ['definite_plural', 'Definite plural'],
+  ],
+  'v.': [
+    ['present', 'Present'],
+    ['past', 'Past'],
+    ['supine', 'Supine'],
+    ['imperative', 'Imperative'],
+  ],
+  'adj.': [
+    ['neuter', 'Neuter (-t)'],
+    ['plural', 'Plural (-a)'],
+  ],
+};
+export const GENDERS = ['en', 'ett'];
+// Keeps only tables for parts of speech the card actually has.
+function normalizeInflection(raw, posList) {
+  const out = {};
+  for (const [pos, fields] of Object.entries(INFLECTIONS)) {
+    if (!posList.includes(pos)) continue;
+    const row = {};
+    for (const [key] of fields) {
+      const v = String(raw?.[pos]?.[key] ?? '').trim();
+      if (key === 'gender' ? GENDERS.includes(v) : v) row[key] = v;
+    }
+    if (Object.keys(row).length) out[pos] = row;
+  }
+  return out;
+}
+export const inflectedForms = (card) =>
+  Object.values(card.inflection || {}).flatMap((row) =>
+    Object.entries(row)
+      .filter(([key]) => key !== 'gender')
+      .flatMap(([, v]) => String(v).split('/'))
+      .map((v) => v.trim())
+      .filter(Boolean),
+  );
+export const wordsOf = (card) => [
+  ...new Set([card.word_en, ...(card.forms || []), ...inflectedForms(card)]),
+];
 export function validateCard(raw, cards = [], excludeId = null) {
   const word_en = String(raw.word_en || '').trim();
   const senses = sensesOf(raw)
@@ -167,6 +214,7 @@ export function validateCard(raw, cards = [], excludeId = null) {
     senses,
     forms: uniqueWords(raw.forms, word_en),
     related: uniqueWords(raw.related, word_en),
+    inflection: normalizeInflection(raw.inflection, senses.map((s) => s.pos)),
     is_starred: !!raw.is_starred,
   };
   const taken = new Map();
