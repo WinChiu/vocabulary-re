@@ -1,4 +1,11 @@
-import { normalize, isPhrase, applyResult, sensesOf, inflectedForms } from './core.js';
+import {
+  normalize,
+  isPhrase,
+  applyResult,
+  sensesOf,
+  inflectedForms,
+  inflectionCells,
+} from './core.js';
 const irregular = {
   be: ['am', 'is', 'are', 'was', 'were', 'been', 'being'],
   go: ['goes', 'went', 'gone', 'going'],
@@ -125,7 +132,17 @@ export class ReviewSession {
   get cloze() {
     return clozeFor(this.card, this.language, this.picks[this.index][1]);
   }
+  get drill() {
+    const cells = inflectionCells(this.card),
+      pick = this.picks[this.index][1];
+    return cells[Math.min(Math.floor(pick * cells.length), cells.length - 1)] || null;
+  }
   check(answer) {
+    if (this.mode === 'inflection') {
+      const pass = !!this.drill?.answers.includes(normalize(answer));
+      if (!pass) this.wrong = true;
+      return pass;
+    }
     const given = normalize(answer),
       cloze = this.mode === 'fill_blank' ? this.cloze : null;
     const pass = cloze

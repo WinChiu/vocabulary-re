@@ -112,3 +112,25 @@ test('inflection tables are validated, feed matching, and render labelled', asyn
   assert.ok(html.includes('<mark>Artikeln</mark>'));
   assert.equal(validateCard({ ...noun, inflection: { 'n.': { gender: 'den' } } }).value.inflection['n.'], undefined);
 });
+test('inflection drill asks one table cell and checks it exactly', async () => {
+  const { inflectionCells, modeAvailable } = await import('../js/core.js');
+  const c = card({ word_en: 'säga', senses: [{ pos: 'v.', meaning_zh: '說', example_en: ['Vad säger du?'] }],
+    inflection: { 'v.': { present: 'säger', past: 'sa/sade', supine: 'sagt' } } });
+  assert.deepEqual(inflectionCells(c).map((x) => x.key), ['present', 'past', 'supine']);
+  const r = new ReviewSession([c], 'inflection', 'sv', () => 0.5);
+  assert.equal(r.drill.key, 'past');
+  assert.equal(r.check('säger'), false);
+  assert.equal(r.check(' SADE '), true);
+  assert.equal(r.check('sa'), true);
+  r.finishCard(true);
+  assert.equal(r.results[0].pass, false);
+  assert.equal(r.cards[0].review_stats.mode_stats.inflection.attempts, 1);
+  const g = new ReviewSession([card({ senses: [{ pos: 'n.', meaning_zh: 'x', example_en: ['x'] }], inflection: { 'n.': { gender: 'ett' } } })], 'inflection', 'sv', () => 0);
+  assert.equal(g.drill.label, 'Gender');
+  assert.equal(g.check('ett'), true);
+  assert.equal(modeAvailable('inflection', 'en'), false);
+  assert.equal(modeAvailable('inflection', 'sv'), true);
+  const html = views.reviewView({ language: 'sv', session: r.index ? new ReviewSession([c], 'inflection', 'sv', () => 0.5) : r });
+  assert.ok(html.includes('NAME THE FORM'));
+  assert.ok(html.includes('Past?'));
+});

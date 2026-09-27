@@ -9,6 +9,7 @@ import {
   sensesOf,
   INFLECTIONS,
   GENDERS,
+  modeAvailable,
 } from './core.js';
 import { acceptedForms, highlight } from './review.js';
 const pos = (p) => (p ? `<span class="pos">${e(p)}</span>` : '');
@@ -125,13 +126,15 @@ export function todayView(state) {
   )}${select(
     'mode',
     'Practice mode',
-    Object.entries(MODES).map(([k, v]) => [
-      k,
-      v,
-      k === 'fill_blank' && f.type === 'phrase',
-    ]),
+    Object.entries(MODES)
+      .filter(([k]) => modeAvailable(k, state.language))
+      .map(([k, v]) => [
+        k,
+        v,
+        ['fill_blank', 'inflection'].includes(k) && f.type === 'phrase',
+      ]),
     f.mode,
-  )}</div><div class="settings-bottom"><label class="check-label"><input type="checkbox" name="due" ${f.due ? 'checked' : ''} ${f.status === 'NEW' ? 'disabled' : ''}><span>Due only</span></label><span>${available.length} words match${state.excluded ? ` · ${state.excluded} without a cloze example excluded` : ''}</span></div></form></details>`;
+  )}</div><div class="settings-bottom"><label class="check-label"><input type="checkbox" name="due" ${f.due ? 'checked' : ''} ${f.status === 'NEW' ? 'disabled' : ''}><span>Due only</span></label><span>${available.length} words match${state.excluded ? ` · ${state.excluded} without ${f.mode === 'inflection' ? 'an inflection table' : 'a cloze example'} excluded` : ''}</span></div></form></details>`;
 }
 export function libraryView(state, list) {
   const f = state.filters;
@@ -190,9 +193,24 @@ export function importView(state) {
   const p = state.importPreview;
   return `<div class="narrow wide">${button('library', icon('arrow-left') + 'Back to library', 'back-link')}<h1>Import CSV</h1><p class="lead">Preview your CSV before importing.</p><section class="import-card"><label class="upload-area">${icon('file-csv')}<strong>Choose your CSV file</strong><span>Word, meaning, and at least one example per word.</span><input id="csv-file" type="file" accept=".csv,text/csv"><small>English, Swedish, and Chinese column headings supported</small></label><p class="import-help">Columns: <code>word, meaning, pos, forms, category, note, example</code><br>Add up to five example columns. Duplicate words will be skipped.</p><a href="./examples/words.csv" download class="text-link">${icon('download-simple')} Download a sample CSV</a></section>${p ? `<section class="import-preview"><h2>One last look</h2><p>${p.entries.length} rows · <strong>${p.valid.length} ready</strong> · ${p.duplicates} duplicates · ${p.invalid} invalid</p><div class="import-rows">${p.entries.map((r) => `<div><span><strong>${e(r.value.word_en || `Row ${r.row}`)}</strong><small>${e(r.value.category || 'Uncategorized')}</small>${r.extra.length ? `<small>${r.extra.map(([k, v]) => `${e(k)}: ${e(v)}`).join(' · ')}</small>` : ''}</span><span class="${r.status === 'ready' ? 'success-text' : 'muted'}">${e(r.reason)}</span></div>`).join('')}</div><p id="import-error" class="form-error" role="alert"></p><div class="form-actions">${button('cancel-import', 'Cancel preview', 'secondary')}${button('confirm-import', `Import ${p.valid.length} words ` + icon('arrow-right'), 'primary', p.valid.length ? '' : 'disabled')}</div></section>` : ''}</div>`;
 }
+const reviewHeader = (r) =>
+  `<div class="review-top"><span>${e(MODES[r.mode])}</span>${button('exit-review', icon('x') + 'Exit session', 'back-link')}</div><div class="review-progress"><span>WORD ${String(r.index + 1).padStart(2, '0')} <span>/ ${String(r.cards.length).padStart(2, '0')}</span></span><span>${Math.round((r.index / r.cards.length) * 100)}% complete</span></div><div class="progress-track"><span style="width:${(r.index / r.cards.length) * 100}%"></span></div>`;
+const answerControls = (r) =>
+  !r.revealed
+    ? button('dont-know', 'I don’t know', 'secondary large') +
+      '<button class="primary large" type="submit" form="answer-form">Check answer ' + icon('arrow-right') + '</button>'
+    : '<span class="action-spacer" aria-hidden="true"></span>' + button('next-card', 'Continue ' + icon('arrow-right'), 'primary large');
+function drillView(state) {
+  const r = state.session,
+    c = r.card,
+    d = r.drill,
+    gender = d.key === 'gender';
+  return `<div class="review-wrap">${reviewHeader(r)}<div class="review-card drill ${r.revealed ? 'revealed' : ''}"><span class="eyebrow">NAME THE FORM</span><h1>${e(c.word_en)}</h1><p class="drill-meaning">${pos(d.pos)}${e(sensesOf(c).find((s) => s.pos === d.pos)?.meaning_zh || c.meaning_zh)}</p><h2 class="prompt-meaning">${gender ? 'en or ett?' : `${e(d.label)}?`}</h2><form id="answer-form"><label class="sr-only" for="answer">Your answer</label><input id="answer" name="answer" autocomplete="off" autocapitalize="off" spellcheck="false" placeholder="${gender ? 'en / ett' : `Type the ${e(d.label.toLowerCase())} form…`}" ${r.revealed ? 'disabled' : ''}><p id="answer-feedback" role="status">${r.revealed ? `The answer is <strong>${e(d.value)}</strong>` : ''}</p></form></div><div class="review-controls">${answerControls(r)}</div></div>`;
+}
 export function reviewView(state) {
   const r = state.session,
     c = r.card;
+  if (r.mode === 'inflection') return drillView(state);
   const flip = r.mode.startsWith('flip'),
     cloze = r.mode === 'fill_blank' ? r.cloze : null,
     sense = cloze ? cloze.sense : r.sense;

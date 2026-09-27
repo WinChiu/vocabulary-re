@@ -6,6 +6,8 @@ import {
   shuffle,
   validateCard,
   sensesOf,
+  inflectionCells,
+  modeAvailable,
   normalize,
   LANGUAGES,
 } from './core.js';
@@ -98,10 +100,13 @@ function renderLogin(error = '') {
 }
 function candidates() {
   const all = filterCards(state.cards, state.settings);
+  const mode = state.settings.mode;
   state.available =
-    state.settings.mode === 'fill_blank'
+    mode === 'fill_blank'
       ? all.filter((c) => clozeFor(c, state.language))
-      : all;
+      : mode === 'inflection'
+        ? all.filter((c) => inflectionCells(c).length)
+        : all;
   state.excluded = all.length - state.available.length;
 }
 function render() {
@@ -758,6 +763,8 @@ root.addEventListener('change', async (event) => {
       return;
     }
     state.language = el.value;
+    if (!modeAvailable(state.settings.mode, state.language))
+      state.settings.mode = 'flip_en';
     try {
       localStorage.setItem('just-word-language-mode', state.language);
     } catch {}

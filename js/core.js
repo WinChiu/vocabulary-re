@@ -3,7 +3,11 @@ export const MODES = {
   flip_zh: 'Flip card · ZH → Word',
   spelling: 'Spelling',
   fill_blank: 'Cloze',
+  inflection: 'Inflection drill',
 };
+// Modes only offered for some languages (inflection tables are Swedish-only).
+export const modeAvailable = (mode, language) =>
+  mode !== 'inflection' || language === 'sv';
 export const LANGUAGES = {
   en: { name: 'English', collection: 'cards', speech: 'en-US' },
   sv: { name: 'Svenska', collection: 'cards_sv', speech: 'sv-SE' },
@@ -190,6 +194,23 @@ export const inflectedForms = (card) =>
       .map((v) => v.trim())
       .filter(Boolean),
   );
+// Every filled cell of a card's inflection table, as a drill question.
+export function inflectionCells(card) {
+  return Object.entries(INFLECTIONS).flatMap(([pos, fields]) =>
+    fields
+      .filter(([key]) => card.inflection?.[pos]?.[key])
+      .map(([key, label]) => {
+        const value = card.inflection[pos][key];
+        return {
+          pos,
+          key,
+          label,
+          value,
+          answers: value.split('/').map(normalize).filter(Boolean),
+        };
+      }),
+  );
+}
 export const wordsOf = (card) => [
   ...new Set([card.word_en, ...(card.forms || []), ...inflectedForms(card)]),
 ];
