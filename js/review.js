@@ -41,15 +41,29 @@ export function acceptedForms(card, language = 'en') {
     ]),
   ];
 }
-const tokensOf = (text) => [...text.matchAll(/[\p{L}\p{M}]+(?:['’][\p{L}]+)?/gu)];
+// Words in `text` that are accepted forms, as {index, text}. A hyphenated
+// compound (top-notch) is tried whole first, then its parts (well-known →
+// known), so both compound and plain entries match.
+function matchesIn(text, accepted) {
+  const found = [];
+  for (const m of text.matchAll(/[\p{L}\p{M}]+(?:[-‐'’][\p{L}\p{M}]+)*/gu)) {
+    if (accepted.includes(normalize(m[0]))) {
+      found.push({ index: m.index, text: m[0] });
+      continue;
+    }
+    for (const p of m[0].matchAll(/[\p{L}\p{M}]+(?:['’][\p{L}]+)?/gu))
+      if (accepted.includes(normalize(p[0])))
+        found.push({ index: m.index + p.index, text: p[0] });
+  }
+  return found;
+}
 export function highlight(example, accepted) {
   const parts = [];
   let last = 0;
-  for (const m of tokensOf(example))
-    if (accepted.includes(normalize(m[0]))) {
-      parts.push([example.slice(last, m.index), false], [m[0], true]);
-      last = m.index + m[0].length;
-    }
+  for (const m of matchesIn(example, accepted)) {
+    parts.push([example.slice(last, m.index), false], [m.text, true]);
+    last = m.index + m.text.length;
+  }
   parts.push([example.slice(last), false]);
   return parts;
 }
@@ -58,15 +72,13 @@ export function clozeOptions(card, language = 'en') {
   const accepted = acceptedForms(card, language);
   return sensesOf(card).flatMap((sense) =>
     sense.example_en.flatMap((example) => {
-      const match = tokensOf(example).find((m) =>
-        accepted.includes(normalize(m[0])),
-      );
+      const [match] = matchesIn(example, accepted);
       return match
         ? [
             {
               before: example.slice(0, match.index),
-              after: example.slice(match.index + match[0].length),
-              answer: match[0],
+              after: example.slice(match.index + match.text.length),
+              answer: match.text,
               accepted,
               sense,
             },

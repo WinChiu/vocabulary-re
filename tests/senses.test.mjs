@@ -87,3 +87,10 @@ test('CSV accepts pos and forms columns and dedupes by form', () => {
   assert.equal(p.valid[0].senses[0].pos, 'v.');
   assert.deepEqual(p.valid[0].forms, ['propelled', 'propels']);
 });
+test('cloze matches hyphenated compounds whole and plain words inside them', () => {
+  assert.equal(clozeFor(card({ word_en: 'top-notch', example_en: ['The service is top-notch.'] })).answer, 'top-notch');
+  assert.equal(clozeFor(card({ word_en: 'vis-à-vis', example_en: ['We compared it vis-à-vis the old plan.'] })).answer, 'vis-à-vis');
+  assert.equal(clozeFor(card({ word_en: 'known', example_en: ['A well-known author.'] })).answer, 'known');
+  assert.equal(clozeFor(card({ word_en: 'notch', example_en: ['The service is top-notch.'] })).answer, 'notch');
+  assert.deepEqual(highlight('A top-notch, top-notch day.', ['top-notch']).filter(([, hit]) => hit).length, 2);
+});
