@@ -3,7 +3,7 @@ import assert from 'node:assert/strict';
 import { mkdtempSync, readFileSync, existsSync } from 'node:fs';
 import path from 'node:path';
 import os from 'node:os';
-import { loadCards, tsMillis, cachePath } from '../scripts/card-cache.mjs';
+import { loadCards, tsMillis, cachePath, CardStore } from '../scripts/card-cache.mjs';
 
 const ts = (ms) => ({ _seconds: Math.floor(ms / 1000), _nanoseconds: (ms % 1000) * 1e6 });
 
@@ -142,4 +142,11 @@ test('tsMillis handles Timestamp-like, JSON and Date forms', () => {
   assert.equal(tsMillis(ts(1234)), 1234);
   assert.equal(tsMillis(new Date(7)), 7);
   assert.equal(tsMillis(undefined), 0);
+});
+test('advancePast moves lastSync beyond our own write times', () => {
+  const store = new CardStore('en', [], 1000, 'unused.json', {});
+  store.advancePast([{ writeTime: { _seconds: 5, _nanoseconds: 0 } }, { writeTime: { _seconds: 3, _nanoseconds: 0 } }]);
+  assert.equal(store.lastSync, 5001);
+  store.advancePast({ writeTime: { _seconds: 2, _nanoseconds: 0 } });
+  assert.equal(store.lastSync, 5001);
 });

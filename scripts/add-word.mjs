@@ -148,12 +148,12 @@ async function runBulkCategory(flags) {
     updated++;
     ops++;
     if (ops === 450) {
-      await batch.commit();
+      store.advancePast(await batch.commit());
       batch = firestore.batch();
       ops = 0;
     }
   }
-  if (ops > 0) await batch.commit();
+  if (ops > 0) store.advancePast(await batch.commit());
   store.save();
 
   const counts = {};
@@ -268,11 +268,12 @@ async function runUpdate(flags) {
   const { value, error } = validateCard(merged, existing, id);
   if (error) return fail(error);
 
-  await collectionRef.doc(id).update({
+  const written = await collectionRef.doc(id).update({
     ...value,
     updated_at: FieldValue.serverTimestamp(),
   });
   store.upsert({ id, ...value });
+  store.advancePast(written);
   store.save();
 
   console.log(JSON.stringify({ ok: true, id, language, card: value, sync: store.sync }));
@@ -406,12 +407,12 @@ async function runBulkAdd(flags) {
     store.upsert({ id: docRef.id, ...value, review_stats: initialStats() });
     ops++;
     if (ops === 450) {
-      await batch.commit();
+      store.advancePast(await batch.commit());
       batch = firestore.batch();
       ops = 0;
     }
   }
-  if (ops > 0) await batch.commit();
+  if (ops > 0) store.advancePast(await batch.commit());
   store.save();
 
   console.log(JSON.stringify({ ok: true, language, addedCount: added.length, added, skipped, sync: store.sync }));
@@ -464,7 +465,7 @@ async function runBulkUpdate(flags) {
   for (let i = 0; i < ops.length; i += 450) {
     const batch = firestore.batch();
     ops.slice(i, i + 450).forEach((op) => op(batch));
-    await batch.commit();
+    store.advancePast(await batch.commit());
   }
   for (const id of deletes) store.remove(id);
   for (const { id, value } of values) store.upsert({ ...store.cards.find((c) => c.id === id), ...value });

@@ -66,6 +66,14 @@ export class CardStore {
   remove(id) {
     this.map.delete(id);
   }
+  // After this script's own commit, move lastSync past the server write time
+  // so the next incremental sync doesn't re-read (and bill) the docs we just
+  // wrote. Trade-off: an app edit landing between our pre-write sync and the
+  // commit (a second or two) is only picked up by a later --refresh.
+  advancePast(writeResults) {
+    for (const r of [writeResults].flat())
+      this.lastSync = Math.max(this.lastSync || 0, tsMillis(r?.writeTime) + 1);
+  }
   save() {
     mkdirSync(path.dirname(this.file), { recursive: true });
     writeFileSync(
