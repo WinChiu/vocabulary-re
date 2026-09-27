@@ -191,13 +191,15 @@ async function runAdd(flags, argv) {
   const { value, error } = validateCard(input, store.cards);
   if (error) return fail(error);
 
-  const docRef = await db().collection(LANGUAGES[language].collection).add({
+  const docRef = db().collection(LANGUAGES[language].collection).doc();
+  const written = await docRef.set({
     ...value,
     review_stats: initialStats(),
     created_at: FieldValue.serverTimestamp(),
     updated_at: FieldValue.serverTimestamp(),
   });
   store.upsert({ id: docRef.id, ...value, review_stats: initialStats() });
+  store.advancePast(written);
   store.save();
 
   console.log(JSON.stringify({ ok: true, id: docRef.id, language, card: value, sync: store.sync }));
@@ -334,11 +336,15 @@ async function runBackup(flags) {
     if (!LANGUAGES[l]) return fail(`Unknown language "${l}". Use "en", "sv", or "all".`);
   }
 
-  // A backup is an explicit full snapshot, so it always does a full read
-  // (which also refreshes the local cache).
+  // Snapshot of the incrementally synced cache: the count() check already
+  // forces a full re-read if anything drifted, so this costs a couple of
+  // reads instead of one per card. --refresh forces a full collection read.
   const snapshot_by_lang = {};
+  const sync = {};
   for (const l of langs) {
-    snapshot_by_lang[l] = (await cards(l, { refresh: true })).cards;
+    const store = await cards(l, { refresh: !!flags.refresh });
+    snapshot_by_lang[l] = store.cards;
+    sync[l] = store.sync;
   }
 
   const exportedAt = new Date().toISOString();
@@ -360,6 +366,7 @@ async function runBackup(flags) {
       ok: true,
       path: outPath,
       counts: Object.fromEntries(langs.map((l) => [l, snapshot_by_lang[l].length])),
+      sync,
     }),
   );
 }

@@ -28,10 +28,10 @@ word from scratch with fresh review history.
    node scripts/add-word.mjs find --lang en --word tacit
    ```
 
-   `find` is a cheap incremental sync by default. If you already synced
-   in this session, `--offline` avoids Firestore entirely; `delete` itself
+   Run it with `--offline` first (zero Firestore calls) — `delete` itself
    re-syncs before deleting, so a stale lookup can't delete the wrong card
-   (a card deleted elsewhere just fails with "No card with id").
+   (a card deleted elsewhere just fails with "No card with id"). Only if
+   `--offline` finds nothing (or no cache exists yet) rerun without it.
 
    - Zero matches → tell the user, stop.
    - Multiple matches → ask the user which one they mean.

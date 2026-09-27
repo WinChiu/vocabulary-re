@@ -28,10 +28,12 @@ ad hoc scripts because the CLI had no bulk primitive; it now does.
    node scripts/add-word.mjs find --lang en --word tacit
    ```
 
-   Returns `{"ok":true,"matches":[{...}],"sync":{...}}` — a cheap
-   incremental sync, or zero Firestore calls with `--offline` if the cache
-   is already fresh this session. `update` re-syncs before writing either
-   way. If `matches` is empty, tell the
+   Returns `{"ok":true,"matches":[{...}],"sync":{...}}`. Run it with
+   `--offline` first (zero Firestore calls): `update` re-syncs and
+   re-validates before writing, so a slightly stale lookup is harmless.
+   Only if `--offline` finds nothing (or errors because no cache exists)
+   rerun without it, in case the word was added in the app since the last
+   sync. If `matches` is empty, tell the
    user the word wasn't found — don't fall back to creating it (that's the
    `add-word` skill's job, and doing it here would be a surprise action the
    user didn't ask for). If more than one match comes back, ask the user
@@ -95,6 +97,24 @@ ad hoc scripts because the CLI had no bulk primitive; it now does.
   in place.
 
 ## Bulk edits
+
+For **several cards with arbitrary field changes** (meanings, senses,
+forms, renames, merges), never loop `update` — each call re-syncs (≈2
+reads) and round-trips separately. Put every change in one plan and use
+`bulk-update`, which syncs once, validates everything before writing, and
+commits in batches:
+
+```bash
+node scripts/add-word.mjs bulk-update --lang en --json-file plan.json
+# plan.json: {"update":[{"id":"...","senses":[...]}, ...], "delete":["id", ...]}
+```
+
+Deletes apply first (so merging a duplicate into another card doesn't trip
+the duplicate check); if any card fails validation nothing is written.
+Build the plan from `list --offline` / the local cache, show the user the
+changes, then run it once.
+
+For the single-field category case, the dedicated command below also works:
 
 When the user asks to change one field (almost always `category`) across
 many or all cards in a language at once — e.g. "re-categorize my whole

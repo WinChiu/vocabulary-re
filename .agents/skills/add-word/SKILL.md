@@ -49,7 +49,11 @@ collection on every command:
   the cache looks wrong; it costs one read per card.
 - Write commands (`add`, `update`, `delete`, `bulk-*`) always do the
   cheap incremental sync first (ignore `--offline`), so duplicate checks
-  are against current data, then mirror their own writes into the cache.
+  are against current data, then mirror their own writes into the cache
+  and move the sync marker past them, so the next sync doesn't re-read
+  (and bill) what this script just wrote.
+- For many edits at once use `bulk-update` (see `update-word`), never a
+  loop of single `update`/`add` calls — each call costs its own sync.
 - Every JSON result includes a `sync` field (`mode`: `offline` /
   `incremental` / `full`, approximate `reads`) — mention it if the user
   asks about usage, and flag it if you see unexpected `full` syncs.
