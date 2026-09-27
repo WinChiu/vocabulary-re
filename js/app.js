@@ -5,22 +5,26 @@ import {
   filterCards,
   shuffle,
   validateCard,
+  sensesOf,
+  normalize,
   LANGUAGES,
 } from './core.js';
 import { MockStore, callWithTimeout } from './data.js';
-import { ReviewSession, clozeFor } from './review.js';
+import { ReviewSession, clozeFor, forms } from './review.js';
 import { parseCSV, prepareImport } from './import.js';
 import { dictionary, speak } from './services.js';
 import * as V from './views.js';
 import { watchKeyboardViewport } from './viewport.js';
 watchKeyboardViewport();
 const root = document.querySelector('#app');
+const emptySense = () => ({ pos: '', meaning_zh: '', example_en: [''] });
 const emptyDraft = () => ({
   word_en: '',
-  meaning_zh: '',
+  senses: [emptySense()],
+  forms: [],
+  related: [],
   category: '',
   note: '',
-  example_en: [''],
   is_starred: false,
 });
 const defaultFilters = () => ({
@@ -302,12 +306,27 @@ function captureDraft() {
   const form = document.querySelector('#card-form');
   if (!form) return;
   const data = new FormData(form);
+  const pos = data.getAll('pos'),
+    meanings = data.getAll('meaning_zh');
   state.draft = {
     word_en: data.get('word_en'),
-    meaning_zh: data.get('meaning_zh'),
+    senses: meanings.map((meaning_zh, i) => ({
+      pos: pos[i] || '',
+      meaning_zh,
+      example_en: [
+        ...form.querySelectorAll(`[name="example"][data-sense="${i}"]`),
+      ].map((el) => el.value),
+    })),
+    forms: String(data.get('forms') || '')
+      .split(/[,，;；]/)
+      .map((v) => v.trim())
+      .filter(Boolean),
+    related: String(data.get('related') || '')
+      .split(/[,，;；]/)
+      .map((v) => v.trim())
+      .filter(Boolean),
     category: data.get('category'),
     note: data.get('note'),
-    example_en: data.getAll('example'),
     is_starred: data.has('is_starred'),
   };
 }
@@ -458,7 +477,9 @@ function answer(form) {
     void input.offsetWidth;
     input.classList.add('wrong');
     input.setAttribute('aria-invalid', 'true');
-    feedback.textContent = 'Not quite. Try again, or reveal the answer.';
+    feedback.textContent = session.wrongForm
+      ? 'Right word, wrong form. Check the sentence and try again.'
+      : 'Not quite. Try again, or reveal the answer.';
     input.select();
   }
 }
@@ -564,8 +585,13 @@ const actions = {
   async edit(el) {
     const card = state.cards.find((c) => c.id === el.dataset.id);
     state.editingId = card.id;
-    state.draft = structuredClone(card);
-    if (!state.draft.example_en.length) state.draft.example_en = [''];
+    state.draft = {
+      ...structuredClone(card),
+      senses: sensesOf(card).map((s) => ({
+        ...structuredClone(s),
+        example_en: s.example_en.length ? [...s.example_en] : [''],
+      })),
+    };
     await navigate('form');
   },
   star: (el) => star(el.dataset.id),
@@ -599,20 +625,47 @@ const actions = {
     render();
     root.querySelector('[data-action="toggle-library-filters"]')?.focus({ preventScroll: true });
   },
-  'add-example': () => {
+  'add-example': (el) => {
     captureDraft();
-    if (state.draft.example_en.length < 5) state.draft.example_en.push('');
+    const i = Number(el.dataset.sense),
+      examples = state.draft.senses[i].example_en;
+    if (examples.length < 5) examples.push('');
     render();
-    document
-      .querySelectorAll('[name="example"]')
-      .item(state.draft.example_en.length - 1)
+    [...document.querySelectorAll(`[name="example"][data-sense="${i}"]`)]
+      .at(-1)
       ?.focus();
   },
   'remove-example': (el) => {
     captureDraft();
-    if (state.draft.example_en.length > 1)
-      state.draft.example_en.splice(Number(el.dataset.index), 1);
+    const examples = state.draft.senses[Number(el.dataset.sense)].example_en;
+    if (examples.length > 1) examples.splice(Number(el.dataset.index), 1);
     render();
+  },
+  'add-sense': () => {
+    captureDraft();
+    state.draft.senses.push(emptySense());
+    render();
+    [...document.querySelectorAll('[name="pos"]')].at(-1)?.focus();
+  },
+  'remove-sense': (el) => {
+    captureDraft();
+    if (state.draft.senses.length > 1)
+      state.draft.senses.splice(Number(el.dataset.sense), 1);
+    render();
+  },
+  async 'open-related'(el) {
+    const word = normalize(el.dataset.word);
+    const card = state.cards.find((c) =>
+      [c.word_en, ...(c.forms || [])].some((w) => normalize(w) === word),
+    );
+    if (!card) {
+      toast(`"${el.dataset.word}" isn’t in your library yet.`);
+      return;
+    }
+    state.previewId = card.id;
+    if (!state.previewIds?.includes(card.id))
+      state.previewIds = [...(state.previewIds || []), card.id];
+    await navigate('preview');
   },
   async import() {
     state.importPreview = null;
@@ -725,8 +778,25 @@ root.addEventListener('change', async (event) => {
     render();
   } else if (el.id === 'csv-file') await importFile(el.files[0]);
 });
+function lemmaHint(value) {
+  const word = normalize(value);
+  if (!word) return '';
+  const owner = state.cards.find(
+    (c) =>
+      c.id !== state.editingId &&
+      normalize(c.word_en) !== word &&
+      forms(c.word_en, state.language).includes(word),
+  );
+  return owner
+    ? `Looks like a form of “${owner.word_en}”. Consider editing that word and adding “${value.trim()}” to its forms.`
+    : '';
+}
 root.addEventListener('input', (event) => {
   const el = event.target;
+  if (el.name === 'word_en' && el.closest('#card-form')) {
+    const hint = root.querySelector('#lemma-hint');
+    if (hint) hint.textContent = lemmaHint(el.value);
+  }
   if (el.name === 'search') {
     const pos = el.selectionStart;
     state.filters.search = el.value;

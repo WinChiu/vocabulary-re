@@ -16,7 +16,7 @@ async (page) => {
   await page.getByRole('button',{name:/Library/}).click();
   await check(page.locator('.word-row').count().then(n=>n===1),'CSV confirmation writes exactly one valid word');
   await page.locator('.word-open').click();
-  await check(page.locator('.detail-examples>div').count().then(n=>n===2),'Multiple example columns preserved');
+  await check(page.locator('.detail-examples .sense-example').count().then(n=>n===2),'Multiple example columns preserved');
   await check(page.locator('.note-block').textContent().then(t=>t.includes('a note, with comma')),'Quoted CSV comma preserved');
   await check(page.locator('.detail-examples').textContent().then(t=>t.includes('A second\nline example.')),'Quoted CSV newline preserved');
   await page.getByRole('button',{name:'Back to library',exact:true}).click();

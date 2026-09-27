@@ -98,7 +98,7 @@ export function filterCards(cards, f = {}, now = new Date()) {
           : c.category === f.category)) &&
       (!f.due || f.status === 'NEW' || isDue(c, now)) &&
       (!f.search ||
-        normalize([c.word_en, c.meaning_zh, c.note].join(' ')).includes(
+        normalize([...wordsOf(c), c.meaning_zh, c.note].join(' ')).includes(
           normalize(f.search),
         ))
     );
@@ -112,30 +112,77 @@ export function shuffle(cards, random = Math.random) {
   }
   return copy;
 }
+export const POS = ['n.', 'v.', 'adj.', 'adv.', 'prep.', 'conj.', 'pron.', 'interj.', 'phr.'];
+const list = (value) =>
+  (Array.isArray(value) ? value : String(value ?? '').split(/[,，;；\n]/))
+    .map((v) => String(v ?? '').trim())
+    .filter(Boolean);
+const uniqueWords = (values, exclude = '') => {
+  const seen = new Set([normalize(exclude)]);
+  return list(values).filter((v) => {
+    const key = normalize(v);
+    if (seen.has(key)) return false;
+    seen.add(key);
+    return true;
+  });
+};
+export function sensesOf(card) {
+  if (Array.isArray(card?.senses) && card.senses.length)
+    return card.senses.map((s) => ({
+      pos: s?.pos || '',
+      meaning_zh: s?.meaning_zh || '',
+      example_en: s?.example_en || [],
+    }));
+  return [
+    {
+      pos: card?.pos || '',
+      meaning_zh: card?.meaning_zh || '',
+      example_en: card?.example_en || [],
+    },
+  ];
+}
+export const formatMeaning = (senses) =>
+  senses.length === 1 && !senses[0].pos
+    ? senses[0].meaning_zh
+    : senses.map((s) => [s.pos, s.meaning_zh].filter(Boolean).join(' ')).join(' / ');
+export const wordsOf = (card) => [card.word_en, ...(card.forms || [])];
 export function validateCard(raw, cards = [], excludeId = null) {
+  const word_en = String(raw.word_en || '').trim();
+  const senses = sensesOf(raw)
+    .map((s) => ({
+      pos: POS.includes(String(s.pos).trim()) ? String(s.pos).trim() : '',
+      meaning_zh: String(s.meaning_zh || '').trim(),
+      example_en: (s.example_en || [])
+        .map(String)
+        .map((v) => v.trim())
+        .filter(Boolean),
+    }))
+    .filter((s, i, all) => all.length === 1 || s.meaning_zh || s.example_en.length);
   const value = {
-    word_en: String(raw.word_en || '').trim(),
-    meaning_zh: String(raw.meaning_zh || '').trim(),
+    word_en,
+    meaning_zh: formatMeaning(senses),
     category: String(raw.category || '').trim(),
     note: String(raw.note || '').trim(),
-    example_en: (raw.example_en || [])
-      .map(String)
-      .map((s) => s.trim())
-      .filter(Boolean),
+    example_en: senses.flatMap((s) => s.example_en),
+    senses,
+    forms: uniqueWords(raw.forms, word_en),
+    related: uniqueWords(raw.related, word_en),
     is_starred: !!raw.is_starred,
   };
+  const taken = new Map();
+  for (const c of cards)
+    if (c.id !== excludeId)
+      for (const w of wordsOf(c)) taken.set(normalize(w), c.word_en);
+  const clash = wordsOf(value).find((w) => taken.has(normalize(w)));
   let error = '';
-  if (!value.word_en || !value.meaning_zh)
+  if (!word_en || senses.some((s) => !s.meaning_zh))
     error = 'Word and meaning are required.';
-  else if (value.example_en.length < 1 || value.example_en.length > 5)
+  else if (senses.some((s) => s.example_en.length < 1 || s.example_en.length > 5))
     error = 'Add between 1 and 5 non-empty examples.';
-  else if (
-    cards.some(
-      (c) =>
-        c.id !== excludeId && normalize(c.word_en) === normalize(value.word_en),
-    )
-  )
+  else if (normalize(word_en) === normalize(taken.get(normalize(word_en)) ?? ''))
     error = 'This word already exists in your library.';
+  else if (clash)
+    error = `"${clash}" is already in your library under "${taken.get(normalize(clash))}".`;
   return { value, error };
 }
 export function applyResult(card, pass, mode, now = new Date()) {

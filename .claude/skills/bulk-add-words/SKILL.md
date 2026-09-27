@@ -30,13 +30,14 @@ of N round-trips, and one review step instead of N.
 
 3. **Draft every card.** For each word, fill in the same fields as
    `add-word`:
-   - `word_en` — required.
-   - `meaning_zh` — required; generate it yourself if not supplied.
+   - `word_en` — required; the base form (see `add-word`).
+   - `senses` — required; one `{pos, meaning_zh, example_en}` per common
+     part of speech (`pos` uses English codes `n.` `v.` `adj.` …; each
+     sense needs a meaning and 1–5 examples in the word's own language).
+   - `forms` / `related` — optional; see `add-word`.
    - `category` — optional but recommended; reuse an existing one from
      step 2 when it fits.
    - `note` — optional.
-   - `example_en` — 1–5 example sentences in the word's own language;
-     generate 1–2 if the user didn't supply any. Required.
    - `is_starred` — only true if asked.
 
 4. **Show the whole drafted batch to the user and get confirmation**
@@ -49,8 +50,8 @@ of N round-trips, and one review step instead of N.
 
    ```bash
    node scripts/add-word.mjs bulk-add --lang en --json '[
-     {"word_en":"tacit","meaning_zh":"心照不宣的、默許的","category":"人格互動","example_en":["There was a tacit agreement not to discuss the topic."]},
-     {"word_en":"braising","meaning_zh":"燉（肉）","category":"飲食烹飪","example_en":["The beef was slow-cooked by braising it in red wine."]}
+     {"word_en":"tacit","senses":[{"pos":"adj.","meaning_zh":"心照不宣的、默許的","example_en":["There was a tacit agreement not to discuss the topic."]}],"category":"人格互動"},
+     {"word_en":"braise","forms":["braising","braised"],"senses":[{"pos":"v.","meaning_zh":"燉（肉）","example_en":["The beef was slow-cooked by braising it in red wine."]}],"category":"飲食烹飪"}
    ]'
    ```
 

@@ -1,7 +1,10 @@
-import { normalize, validateCard } from './core.js';
+import { normalize, validateCard, wordsOf } from './core.js';
 export function fieldFor(header) {
   const h = normalize(header);
   if (/example|sentence|例句/.test(h)) return 'example_en';
+  if (/^(pos|part of speech|詞性)$/.test(h)) return 'pos';
+  if (/^(forms?|型態|變化)$/.test(h)) return 'forms';
+  if (/^(related|相關字?)$/.test(h)) return 'related';
   if (/^(category|categories|type|類別|分類)$/.test(h)) return 'category';
   if (/note|備註|筆記/.test(h)) return 'note';
   if (/mean|zh|chinese|意思|中文/.test(h)) return 'meaning_zh';
@@ -16,7 +19,7 @@ export function prepareImport(rows, cards = []) {
   if (!rows.length)
     return { entries: [], valid: [], duplicates: 0, invalid: 0 };
   const [headers, ...body] = rows;
-  const seen = new Set(cards.map((c) => normalize(c.word_en)));
+  const seen = new Set(cards.flatMap(wordsOf).map(normalize));
   const entries = [];
   body.forEach((cells, index) => {
     if (!cells.some((c) => String(c ?? '').trim())) return;
@@ -31,8 +34,10 @@ export function prepareImport(rows, cards = []) {
       else if (v) extra.push([String(h), v]);
     });
     const { value, error } = validateCard(raw);
-    const duplicate = !error && seen.has(normalize(value.word_en));
-    if (!error && !duplicate) seen.add(normalize(value.word_en));
+    const duplicate =
+      !error && wordsOf(value).some((w) => seen.has(normalize(w)));
+    if (!error && !duplicate)
+      wordsOf(value).forEach((w) => seen.add(normalize(w)));
     entries.push({
       row: index + 2,
       value,

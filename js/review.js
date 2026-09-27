@@ -1,4 +1,4 @@
-import { normalize, isPhrase, applyResult } from './core.js';
+import { normalize, isPhrase, applyResult, sensesOf } from './core.js';
 const irregular = {
   be: ['am', 'is', 'are', 'was', 'were', 'been', 'being'],
   go: ['goes', 'went', 'gone', 'going'],
@@ -29,25 +29,57 @@ export function forms(word, language = 'en') {
       w.endsWith('e') && !w.endsWith('ee') ? w.slice(0, -1) + 'ing' : w + 'ing',
     );
   }
-  if (/^[^aeiou]*[aeiou][^aeiouwxy]$/.test(w))
+  if (/[^aeiou][aeiou][^aeiouwxy]$/.test(w))
     add(w + w.at(-1) + 'ed', w + w.at(-1) + 'ing');
   return [...result];
 }
-export function clozeFor(card, language = 'en') {
-  if (isPhrase(card.word_en)) return null;
-  const accepted = forms(card.word_en, language);
-  for (const example of card.example_en || []) {
-    const tokens = [...example.matchAll(/[\p{L}\p{M}]+(?:['’][\p{L}]+)?/gu)];
-    const match = tokens.find((m) => accepted.includes(normalize(m[0])));
-    if (match)
-      return {
-        before: example.slice(0, match.index),
-        after: example.slice(match.index + match[0].length),
-        answer: match[0],
-        accepted,
-      };
-  }
-  return null;
+export function acceptedForms(card, language = 'en') {
+  return [
+    ...new Set([
+      ...forms(card.word_en, language),
+      ...(card.forms || []).map(normalize),
+    ]),
+  ];
+}
+const tokensOf = (text) => [...text.matchAll(/[\p{L}\p{M}]+(?:['’][\p{L}]+)?/gu)];
+export function highlight(example, accepted) {
+  const parts = [];
+  let last = 0;
+  for (const m of tokensOf(example))
+    if (accepted.includes(normalize(m[0]))) {
+      parts.push([example.slice(last, m.index), false], [m[0], true]);
+      last = m.index + m[0].length;
+    }
+  parts.push([example.slice(last), false]);
+  return parts;
+}
+export function clozeOptions(card, language = 'en') {
+  if (isPhrase(card.word_en)) return [];
+  const accepted = acceptedForms(card, language);
+  return sensesOf(card).flatMap((sense) =>
+    sense.example_en.flatMap((example) => {
+      const match = tokensOf(example).find((m) =>
+        accepted.includes(normalize(m[0])),
+      );
+      return match
+        ? [
+            {
+              before: example.slice(0, match.index),
+              after: example.slice(match.index + match[0].length),
+              answer: match[0],
+              accepted,
+              sense,
+            },
+          ]
+        : [];
+    }),
+  );
+}
+export function clozeFor(card, language = 'en', pick = 0) {
+  const options = clozeOptions(card, language);
+  return options.length
+    ? options[Math.min(Math.floor(pick * options.length), options.length - 1)]
+    : null;
 }
 export class ReviewSession {
   constructor(cards, mode, language = 'en', random = Math.random) {
@@ -58,9 +90,8 @@ export class ReviewSession {
     this.results = [];
     this.wrong = false;
     this.revealed = false;
-    this.exampleIndex = cards.map((c) =>
-      Math.floor(random() * (c.example_en?.length || 1)),
-    );
+    this.picks = cards.map(() => [random(), random()]);
+    this.wrongForm = false;
   }
   get card() {
     return this.cards[this.index];
@@ -68,18 +99,28 @@ export class ReviewSession {
   get done() {
     return this.index >= this.cards.length;
   }
+  get sense() {
+    const senses = sensesOf(this.card),
+      [pick] = this.picks[this.index];
+    return senses[Math.min(Math.floor(pick * senses.length), senses.length - 1)];
+  }
   get example() {
-    return this.card.example_en[this.exampleIndex[this.index]] || '';
+    const examples = this.sense.example_en,
+      pick = this.picks[this.index][1];
+    return examples[Math.min(Math.floor(pick * examples.length), examples.length - 1)] || '';
+  }
+  get cloze() {
+    return clozeFor(this.card, this.language, this.picks[this.index][1]);
   }
   check(answer) {
-    const pass =
-      this.mode === 'fill_blank'
-        ? clozeFor(this.card, this.language)?.accepted.includes(
-            normalize(answer),
-          )
-        : normalize(answer) === normalize(this.card.word_en);
+    const given = normalize(answer),
+      cloze = this.mode === 'fill_blank' ? this.cloze : null;
+    const pass = cloze
+      ? given === normalize(cloze.answer)
+      : given === normalize(this.card.word_en);
+    this.wrongForm = !!cloze && !pass && cloze.accepted.includes(given);
     if (!pass) this.wrong = true;
-    return !!pass;
+    return pass;
   }
   finishCard(pass, now = new Date()) {
     if (this.done) return;
@@ -89,6 +130,7 @@ export class ReviewSession {
     this.results.push({ id: card.id, word: card.word_en, pass: recalled });
     this.index++;
     this.wrong = false;
+    this.wrongForm = false;
     this.revealed = false;
   }
 }

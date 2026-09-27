@@ -6,7 +6,7 @@ import path from 'node:path';
 import os from 'node:os';
 import { initializeApp, cert } from 'firebase-admin/app';
 import { getFirestore, FieldValue } from 'firebase-admin/firestore';
-import { LANGUAGES, categories, validateCard, initialStats, normalize } from '../js/core.js';
+import { LANGUAGES, categories, validateCard, initialStats, normalize, sensesOf, wordsOf } from '../js/core.js';
 import { loadCards } from './card-cache.mjs';
 
 function fail(message) {
@@ -212,10 +212,10 @@ async function runFind(flags) {
   const store = await cards(language, flags, { allowOffline: true });
   const all = store.cards;
   const query = normalize(flags.word);
-  const exact = all.filter((c) => normalize(c.word_en) === query);
+  const exact = all.filter((c) => wordsOf(c).some((w) => normalize(w) === query));
   const matches = exact.length
     ? exact
-    : all.filter((c) => normalize(c.word_en).includes(query));
+    : all.filter((c) => wordsOf(c).some((w) => normalize(w).includes(query)));
 
   console.log(JSON.stringify({ ok: true, matches, sync: store.sync }));
 }
@@ -253,6 +253,18 @@ async function runUpdate(flags) {
   }
 
   const merged = { ...current, ...patch };
+  // A legacy-style patch (meaning_zh / example_en without senses) edits the
+  // card's single sense, keeping its part of speech.
+  if (!patch.senses && ('meaning_zh' in patch || 'example_en' in patch)) {
+    const senses = sensesOf(current);
+    if (senses.length > 1)
+      return fail('This word has several meanings. Pass "senses" in --json to change them.');
+    merged.senses = [{
+      ...senses[0],
+      ...('meaning_zh' in patch ? { meaning_zh: patch.meaning_zh } : {}),
+      ...('example_en' in patch ? { example_en: patch.example_en } : {}),
+    }];
+  }
   const { value, error } = validateCard(merged, existing, id);
   if (error) return fail(error);
 

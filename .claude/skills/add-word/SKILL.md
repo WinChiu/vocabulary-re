@@ -75,17 +75,35 @@ library — use these commands (or `--offline`) instead.
    changes, and the `add` step syncs before its duplicate check anyway.
 
 3. **Draft the card.** Fill in every field:
-   - `word_en` — the word/phrase as given (required)
-   - `meaning_zh` — Traditional Chinese meaning (required). Generate it
-     yourself if the user didn't supply one.
+   - `word_en` — the **base form** (lemma), e.g. `propel` when the user
+     gives `propelled` (required). Say so in the draft when you changed
+     it, and put the given form in `forms`. Exception: keep the given
+     form when it is its own dictionary entry (e.g. `emerging` adj.).
+   - `senses` — one entry per part of speech, each
+     `{"pos": "...", "meaning_zh": "...", "example_en": ["..."]}`:
+     - `pos` — one of `n.` `v.` `adj.` `adv.` `prep.` `conj.` `pron.`
+       `interj.` `phr.` (English codes; `""` if unsure).
+     - `meaning_zh` — Traditional Chinese meaning for that part of
+       speech (required). Generate it yourself if not supplied.
+     - `example_en` — 1 to 5 example sentences **in the word's own
+       language** (English for an English word, Swedish for a Swedish
+       word) that use the word in that part of speech. Generate 1–2
+       natural ones if the user didn't provide any. Required.
+     Only list parts of speech that are actually common; don't pad.
+   - `forms` — inflected forms worth tracking (irregular forms, forms
+     used in the examples, e.g. `["propelled","propelling"]`). Optional.
+     Cloze review asks for the exact form in the sentence, so vary the
+     forms across examples when it helps.
+   - `related` — derived words with a different spelling that deserve
+     their own card (e.g. `scrutinize` for `scrutiny`). Optional.
    - `category` — reuse one from step 2 when it fits; otherwise propose a
      short new one. Optional but recommended.
    - `note` — optional; leave empty unless useful context was given.
-   - `example_en` — 1 to 5 example sentences **in the word's own language**
-     (English sentences for an English word, Swedish sentences for a
-     Swedish word). Generate 1–2 natural ones if the user didn't provide
-     any. Required — at least one.
    - `is_starred` — only true if the user asked to star it.
+
+   `meaning_zh` / `example_en` are derived from `senses` automatically —
+   don't pass them alongside `senses`. The duplicate check also covers
+   `forms`, so `propelled` is rejected if `propel` already lists it.
 
 4. **Show the drafted card to the user and get confirmation** before
    writing anything — the meaning and examples are AI-generated and the
@@ -97,7 +115,7 @@ library — use these commands (or `--offline`) instead.
    special characters):
 
    ```bash
-   node scripts/add-word.mjs add --json '{"language":"en","word_en":"serendipity","meaning_zh":"意外發現美好事物的運氣","category":"Personal growth","note":"","example_en":["Let curiosity lead the way to serendipity."],"is_starred":false}'
+   node scripts/add-word.mjs add --json '{"language":"en","word_en":"serendipity","senses":[{"pos":"n.","meaning_zh":"意外發現美好事物的運氣","example_en":["Let curiosity lead the way to serendipity."]}],"forms":[],"related":["serendipitous"],"category":"Personal growth","note":"","is_starred":false}'
    ```
 
 6. **Report the result** from the script's JSON output:

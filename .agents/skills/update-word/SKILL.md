@@ -45,9 +45,13 @@ ad hoc scripts because the CLI had no bulk primitive; it now does.
    patch onto the existing card, so omitted fields are preserved
    automatically — never resend the full card, only the delta). Common
    edits:
-   - Fixing or refining `meaning_zh`
-   - Adding/editing/removing entries in `example_en` (still 1–5 sentences,
-     in the word's own language)
+   - Fixing meanings or examples: pass the full `senses` array (each
+     `{pos, meaning_zh, example_en}`, 1–5 examples per sense, in the
+     word's own language). For a card with a single sense, a plain
+     `meaning_zh` / `example_en` patch also works and keeps its `pos`;
+     for multi-sense cards the script rejects that and asks for `senses`.
+   - Adding a part of speech (append to `senses`), or setting `forms` /
+     `related` (full arrays)
    - Changing `category` or `note`
    - Toggling `is_starred`
 
