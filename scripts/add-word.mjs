@@ -417,6 +417,62 @@ async function runBulkAdd(flags) {
   console.log(JSON.stringify({ ok: true, language, addedCount: added.length, added, skipped, sync: store.sync }));
 }
 
+// Applies many edits in one batched write:
+// {"update":[{"id":"...", ...patch}], "delete":["id", ...]}
+// Deletes are applied first so merged-away words don't trip duplicate checks.
+// Every merged card is validated before anything is written.
+async function runBulkUpdate(flags) {
+  const language = flags.lang;
+  if (!LANGUAGES[language])
+    return fail(`Unknown language "${language}". Use "en" or "sv".`);
+  let plan;
+  try {
+    plan = JSON.parse(flags['json-file'] ? readFileSync(flags['json-file'], 'utf8') : flags.json);
+  } catch {
+    return fail('Provide a valid plan via --json or --json-file.');
+  }
+  const updates = plan.update || [];
+  const deletes = plan.delete || [];
+
+  const store = await cards(language, flags);
+  let existing = store.cards.filter((c) => !deletes.includes(c.id));
+  const missing = [...deletes, ...updates.map((u) => u.id)].filter(
+    (id) => !store.cards.some((c) => c.id === id),
+  );
+  if (missing.length) return fail(`Unknown card ids: ${missing.join(', ')}`);
+
+  const values = [];
+  const errors = [];
+  for (const { id, ...patch } of updates) {
+    const current = existing.find((c) => c.id === id);
+    const { value, error } = validateCard({ ...current, ...patch }, existing, id);
+    if (error) errors.push({ id, word_en: current.word_en, error });
+    else {
+      values.push({ id, value });
+      existing = existing.map((c) => (c.id === id ? { ...c, ...value } : c));
+    }
+  }
+  if (errors.length) return fail(`Nothing written. ${JSON.stringify(errors)}`);
+
+  const firestore = db();
+  const collectionRef = firestore.collection(LANGUAGES[language].collection);
+  const ops = [
+    ...deletes.map((id) => (b) => b.delete(collectionRef.doc(id))),
+    ...values.map(({ id, value }) => (b) =>
+      b.update(collectionRef.doc(id), { ...value, updated_at: FieldValue.serverTimestamp() })),
+  ];
+  for (let i = 0; i < ops.length; i += 450) {
+    const batch = firestore.batch();
+    ops.slice(i, i + 450).forEach((op) => op(batch));
+    await batch.commit();
+  }
+  for (const id of deletes) store.remove(id);
+  for (const { id, value } of values) store.upsert({ ...store.cards.find((c) => c.id === id), ...value });
+  store.save();
+
+  console.log(JSON.stringify({ ok: true, language, updated: values.length, deleted: deletes.length, sync: store.sync }));
+}
+
 async function main() {
   const [command, ...rest] = process.argv.slice(2);
   const flags = parseFlags(rest);
@@ -429,6 +485,7 @@ async function main() {
   if (command === 'backup') return runBackup(flags);
   if (command === 'bulk-category') return runBulkCategory(flags);
   if (command === 'bulk-add') return runBulkAdd(flags);
+  if (command === 'bulk-update') return runBulkUpdate(flags);
   fail('Usage: add-word.mjs add [--json <json> | --lang --word --meaning --category --note --example ... --starred]\n       add-word.mjs categories --lang <en|sv> [--offline]\n       add-word.mjs list --lang <en|sv> [--offline]\n       add-word.mjs find --lang <en|sv> --word <text> [--offline]\n       (any command: --refresh forces a full re-read into the local cache)\n       add-word.mjs update --lang <en|sv> (--id <id> | --word <text>) [--json <json> | --meaning --category --note --example ... --starred]\n       add-word.mjs delete --lang <en|sv> (--id <id> | --word <text>)\n       add-word.mjs backup [--lang <en|sv|all>] [--out <path>]\n       add-word.mjs bulk-category --lang <en|sv> --json \'{"word": "category", ...}\' [--allow-partial]\n       add-word.mjs bulk-add --lang <en|sv> --json \'[{"word_en":"...","meaning_zh":"...","example_en":["..."]}, ...]\'');
 }
 
