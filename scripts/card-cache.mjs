@@ -112,7 +112,9 @@ export async function loadCards(lang, getCollection, { offline = false, refresh 
     result = await full(refresh ? 'refresh' : 'no-cache');
     result.mode = 'full';
   } else {
-    const since = new Date(cached.last_sync || 0);
+    // +1ms: every doc stamped exactly at last_sync is already cached (a batch
+    // commit stamps all its docs identically, so >= would re-read the batch).
+    const since = new Date((cached.last_sync || 0) + 1);
     const changed = await collectionRef.where('updated_at', '>=', since).get();
     const map = new Map(cached.cards.map((c) => [c.id, c]));
     for (const doc of changed.docs) map.set(doc.id, toCard(doc));

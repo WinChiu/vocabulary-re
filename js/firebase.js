@@ -100,7 +100,7 @@ export class FirebaseStore {
       fetchSince: async (ms) =>
         toCards(
           await callWithTimeout(
-            getDocs(query(ref, where('updated_at', '>=', new Date(ms)))),
+            getDocs(query(ref, where('updated_at', '>=', new Date(ms + 1)))),
           ),
         ),
       count: async () =>
